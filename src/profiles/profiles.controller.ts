@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
 import { CreateProfileDto } from './dto/CreateProfileDto';
 import { UpdateProfileDto } from './dto/UpdateProfileDto';
 import { ProfilesService } from './profiles.service';
@@ -36,8 +36,6 @@ export class ProfilesController {
     //DELETE /profiles/:id
     @Delete(':id')
     delete(@Param('id') id: string){
-        console.log({id});
-        
         return this.profilesService.deleteProfile(id)
     }
 }
