@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { CreateProfileDto } from './dto/CreateProfileDto';
+import { UpdateProfileDto } from './dto/UpdateProfileDto';
 
 export interface Profile {
     id: string;
@@ -38,12 +39,13 @@ export class ProfilesService {
         return this.findOne(newProfile.id)
     }
 
-    updateProfile(id: string ,profile: Profile){
+    updateProfile(id: string, profile: UpdateProfileDto){
         const profileIndex = this.profiles.findIndex(p => p.id === id)
 
         if (profileIndex === -1) throw new NotFoundException(`Profile ${id} not found`);
 
-        this.profiles[profileIndex] = profile
+        // the URL owns the identity — the body may never rewrite it
+        this.profiles[profileIndex] = { ...this.profiles[profileIndex], ...profile, id }
         return this.profiles[profileIndex];
     }
 
