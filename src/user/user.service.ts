@@ -24,10 +24,10 @@ export class UserService {
     // hash password
     const passwordHash = await bcrypt.hash(password, 10)
 
-    // insert to table
-    const saved = await this.userRepo.save({ email, passwordHash });
-    const { passwordHash: _, ...result } = saved;
-    return result;
+    // create() builds a real User instance — save() on a plain object literal
+    // returns a plain object, and @Exclude() metadata only applies to instances
+    const user = this.userRepo.create({ email, passwordHash });
+    return this.userRepo.save(user);
   }
 
   findAll() {
