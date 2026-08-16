@@ -13,7 +13,7 @@ export class UserService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
   ) {}
-  
+
   async create(createUserDto: CreateUserDto) {
     const { email, password } = createUserDto
 
@@ -34,25 +34,32 @@ export class UserService {
     return this.userRepo.find();
   }
 
-  findOne(id: number) {
-    return this.userRepo.findOneBy({ id: `${id}` });
+  async findOne(id: string) {
+    const user = await this.userRepo.findOneBy({ id });
+    if (!user) throw new NotFoundException(`User ${id} not found`);
+
+    return user;
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto) {
-    const existing = await this.userRepo.findOneBy({ id: `${id}` })
-    if (!existing) throw new NotFoundException('User not found');
+  async update(id: string, updateUserDto: UpdateUserDto) {
+    const user = await this.findOne(id);
+    const { email, password } = updateUserDto;
 
-    const updatedUser = await this.userRepo.update({ id: `${id}` }, { ...updateUserDto });
+    // changing the email has to respect the same uniqueness rule as create()
+    if (email && email !== user.email) {
+      const existing = await this.userRepo.findOneBy({ email });
+      if (existing) throw new ConflictException('Email already registered');
+      user.email = email;
+    }
 
-    return updatedUser;
+    // the DTO carries a plain password; the column stores a hash
+    if (password) user.passwordHash = await bcrypt.hash(password, 10);
+
+    return this.userRepo.save(user);
   }
 
-  async remove(id: number) {
-    const existing = await this.userRepo.findOneBy({ id: `${id}` })
-    if (!existing) throw new NotFoundException('User not found');
-
-    const deletedUser = await this.userRepo.delete({ id: `${id}`  });
-
-    return deletedUser;
+  async remove(id: string) {
+    const result = await this.userRepo.delete(id);
+    if (result.affected === 0) throw new NotFoundException(`User ${id} not found`);
   }
 }
