@@ -8,13 +8,17 @@ next step easier to understand.
 Never batch two lessons into one commit — when something breaks you want exactly one
 suspect.
 
-Legend: 🟢 = do now (Phase 1, finish CRUD) · 🔵 = after CRUD works · ⚪️ = polish / later.
+Legend: ✅ = done · 🔵 = do now · ⚪️ = polish / later.
+
+**Status (2026-08-16):** Phase 0 and Phase 1 are complete — items 1–9 are done and each
+landed as its own commit. Item 16 (mocked repository in the specs) was pulled forward out
+of Phase 4 so `pnpm test` is green; the rest of Phase 4 is untouched. **Phase 2 is next.**
 
 ---
 
 ## Phase 0 — Safety net (5 minutes, before touching any code)
 
-### 1. 🟢 Make the initial git commit
+### 1. ✅ Make the initial git commit
 
 The repo has a `main` branch with **zero commits**. Everything is untracked.
 
@@ -32,7 +36,7 @@ versus what you thought it touched.
 Verified: `.gitignore` already excludes `.env`, `dist/`, `node_modules/`, so `git add -A`
 is safe here.
 
-### 2. 🟢 Move `@types/bcrypt` to devDependencies
+### 2. ✅ Move `@types/bcrypt` to devDependencies
 
 It sits in `dependencies` in `package.json`.
 
@@ -44,12 +48,12 @@ honest about what actually ships.
 
 ---
 
-## Phase 1 — Finish the basic CRUD 🟢
+## Phase 1 — Finish the basic CRUD ✅
 
 This is the goal you named. Everything here is about making `user/` and `profiles/`
 behave like real REST resources. Nothing here needs a new library.
 
-### 3. Fix the inverted logic in `UserService.update()`
+### 3. ✅ Fix the inverted logic in `UserService.update()`
 
 Current code (`src/user/user.service.ts`):
 
@@ -76,7 +80,7 @@ The secondary lesson is the **guard clause**: check the bad case, throw, and let
 happy path continue unindented. Read the guard out loud — "if the user exists, throw
 not-found" — and the bug is audible.
 
-### 4. Implement `findAll()`, `findOne()`, `remove()` in `UserService`
+### 4. ✅ Implement `findAll()`, `findOne()`, `remove()` in `UserService`
 
 All three are still Nest CLI string stubs (`return \`This action returns all user\``).
 
@@ -111,7 +115,7 @@ where the client had a stale id.
 Note `findAll()` will return password hashes until step 7 — that's intentional
 sequencing, you'll see the problem before you fix it.
 
-### 5. Fix the id type mismatch in `UserController`
+### 5. ✅ Fix the id type mismatch in `UserController`
 
 ```ts
 findOne(@Param('id') id: string) { return this.userService.findOne(+id); }  // ← number
@@ -130,7 +134,7 @@ loses precision past 2^53, so `+id` on a large id would produce a value that doe
 match any row. This bug is invisible in a dev DB with 5 users and catastrophic later.
 That's the general shape of boundary bugs: correct-looking, silent, and time-delayed.
 
-### 6. Make `ProfilesService` throw instead of returning strings
+### 6. ✅ Make `ProfilesService` throw instead of returning strings
 
 ```ts
 if (profileIndex === -1) return 'Not fount'   // ← typo, and wrong mechanism
@@ -152,7 +156,7 @@ subclasses and maps them to the right status and JSON shape automatically. You w
 This is the same lesson as step 3, arriving from the opposite direction — there the code
 threw the wrong exception, here it doesn't throw at all.
 
-### 7. Stop leaking `passwordHash`
+### 7. ✅ Stop leaking `passwordHash`
 
 `create()` strips it by hand:
 
@@ -181,7 +185,7 @@ opt-out-by-default, decided once, at the serialization layer. Doing it per-handl
 destructuring means the rule lives in N places and step 4 has already proven you'll
 forget one of them.
 
-### 8. Fix `updateProfile`'s signature and stop trusting the body's `id`
+### 8. ✅ Fix `updateProfile`'s signature and stop trusting the body's `id`
 
 Two coupled problems:
 
@@ -204,7 +208,7 @@ and an authority question is a security question. The general form — *never le
 payload decide which record it applies to* — is the same bug class as mass-assignment
 vulnerabilities, and step 9's `whitelist: true` is the systematic defense.
 
-### 9. Delete the leftover `console.log({ id })` in `ProfilesController.delete`
+### 9. ✅ Delete the leftover `console.log({ id })` in `ProfilesController.delete`
 
 **Principle — use the framework's logger, not `console`.** Nest's `Logger` gives you
 levels, a context tag, and one place to redirect output when you later ship structured
@@ -344,7 +348,10 @@ corepack enforce the right tool automatically.
 
 Deliberately after Phase 1–3: tests written against half-finished behavior get rewritten.
 
-### 16. Give the specs a mocked repository
+### 16. ✅ Give the specs a mocked repository
+
+*(Done early — pulled forward out of order so `pnpm test` is green at the Phase 1
+milestone. The profiles controller spec was also missing `ProfilesService`.)*
 
 `user.service.spec.ts` and `user.controller.spec.ts` register only the service:
 

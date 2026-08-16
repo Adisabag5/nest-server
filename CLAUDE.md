@@ -10,7 +10,7 @@ you need from the map below. Do not scan `src/` or run `find`. Never read
 ## Stack
 
 Node 22 · TypeScript 5.7 (ESM `nodenext`, `strictNullChecks` on, `noImplicitAny` off)
-NestJS 11 · TypeORM + MySQL (`mysql2`) · `@nestjs/config` · `bcrypt` · Jest + Supertest · pnpm
+NestJS 11 · TypeORM + MySQL (`mysql2`) · `@nestjs/config` · `bcrypt` · `class-transformer` · Jest + Supertest · pnpm
 
 ## Commands (run from repo root)
 
@@ -55,11 +55,15 @@ test/app.e2e-spec.ts       e2e for GET /
 | POST | `/profiles` | createProfile | returns created profile |
 | PUT | `/profiles/:id` | updateProfile | full replace |
 | DELETE | `/profiles/:id` | deleteProfile | |
-| POST | `/user` | UserService.create | hashes password (bcrypt, 10 rounds), returns user w/o hash |
-| GET | `/user` | findAll | **stub — returns a string** |
-| GET | `/user/:id` | findOne | **stub** |
-| PATCH | `/user/:id` | update | **stub / buggy, see below** |
-| DELETE | `/user/:id` | remove | **stub** |
+| POST | `/user` | UserService.create | hashes password (bcrypt, 10 rounds); 409 on duplicate email |
+| GET | `/user` | findAll | |
+| GET | `/user/:id` | findOne | 404 if missing |
+| PATCH | `/user/:id` | update | 404 if missing, 409 on duplicate email; re-hashes `password` |
+| DELETE | `/user/:id` | remove | 404 if missing |
+
+`id` params are **strings** end-to-end (`User.id` is `bigint`, which TypeORM maps to string).
+`passwordHash` never reaches a response: `@Exclude()` on the entity + a global
+`ClassSerializerInterceptor` registered in `main.ts`.
 
 ## Data model
 
@@ -87,16 +91,19 @@ Never print or commit `.env` values.
 
 ## Known issues / good next steps
 
-1. `UserService.update()` — checks `findOneBy({id})` and throws `ConflictException('Email already registered')`
-   when the user **exists**. Logic is inverted and the message is wrong; should be `NotFoundException` when missing,
-   then actually persist the update.
-2. `UserService.findAll/findOne/remove` are still CLI-generated string stubs.
-3. `ProfilesService` returns the string `'Not fount'` (typo) on miss instead of throwing `NotFoundException`.
-4. No `ValidationPipe` / `class-validator` — DTOs are not validated at runtime. Adding
-   `app.useGlobalPipes(new ValidationPipe({ whitelist: true }))` in `main.ts` is the natural next lesson.
-5. Only scaffold "should be defined" tests exist. `user.*.spec.ts` will fail once the repository token is
-   required — they need a mocked `getRepositoryToken(User)` provider.
-6. `git` repo has no commits yet (branch `main`, no remote) — everything is untracked.
+See `LEARNING-PLAN.md` for the full ordered roadmap. Phase 0 and Phase 1 are done —
+CRUD on both modules is real, throws proper HTTP exceptions, and `pnpm test` is green
+(5 scaffold suites, wired with a mocked repository). Remaining, in order:
+
+1. No `ValidationPipe` / `class-validator` — DTOs are not validated at runtime, so
+   `POST /user` with an empty body reaches `bcrypt.hash(undefined, 10)` and 500s.
+   Adding `app.useGlobalPipes(new ValidationPipe({ whitelist: true }))` in `main.ts`
+   is the next lesson (plan Phase 2).
+2. `profiles/dto/*` still uses PascalCase filenames and hand-duplicates fields instead of
+   `PartialType(CreateProfileDto)`.
+3. Env keys are unnamespaced (`HOST`, `USERNAME`, `PASSWORD`) and unvalidated; no `.env.example`.
+4. The specs only assert `toBeDefined()` — no behavior tests for the branches added in Phase 1.
+5. `test/app.e2e-spec.ts` imports the real `AppModule`, so it needs a live MySQL to run.
 
 ## Working agreement
 
