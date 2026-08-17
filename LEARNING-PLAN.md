@@ -8,15 +8,16 @@ next step easier to understand.
 Never batch two lessons into one commit — when something breaks you want exactly one
 suspect.
 
-Legend: ✅ = done · 🔵 = do now · ⚪️ = polish / later.
+Legend: ✅ = done · 🟢 = do now · 🔵 = soon · ⚪️ = polish / later.
 
-**Status (2026-08-16):** Phase 0 and Phase 1 are complete — items 1–9 are done and each
-landed as its own commit. Item 16 (mocked repository in the specs) was pulled forward out
-of Phase 4 so `pnpm test` is green; the rest of Phase 4 is untouched. **Phase 2 is next.**
+**Status (2026-08-17):** Phases 0–4 are complete — items 1–18 all landed, each as its own
+commit. CRUD is real on both modules, request bodies are validated at the boundary, env
+keys are namespaced and checked at boot, and both suites run without a live MySQL
+(19 unit + 6 e2e). **Phase 5 — auth — is next.**
 
 ---
 
-## Phase 0 — Safety net (5 minutes, before touching any code)
+## Phase 0 — Safety net (5 minutes, before touching any code) ✅
 
 ### 1. ✅ Make the initial git commit
 
@@ -222,7 +223,7 @@ and tag it.** Everything below is a new concept rather than a completion of an o
 
 ---
 
-## Phase 2 — The input trust boundary 🔵
+## Phase 2 — The input trust boundary ✅
 
 Phase 1 made your handlers correct *given good input*. Phase 2 stops assuming good input.
 It comes second on purpose: validation errors are much easier to reason about once the
@@ -294,7 +295,7 @@ tool and the repo agree.
 
 ---
 
-## Phase 3 — Configuration correctness 🔵
+## Phase 3 — Configuration correctness ✅
 
 ### 13. Rename the env keys and add `.env.example`
 
@@ -344,7 +345,7 @@ corepack enforce the right tool automatically.
 
 ---
 
-## Phase 4 — Make the tests actually run 🔵
+## Phase 4 — Make the tests actually run ✅
 
 Deliberately after Phase 1–3: tests written against half-finished behavior get rewritten.
 
@@ -404,7 +405,7 @@ Either the test owns its environment or it can't own its verdict.
 
 ---
 
-## Phase 5 — Auth: the natural next feature ⚪️
+## Phase 5 — Auth: the natural next feature 🟢 ← you are here
 
 You store bcrypt password hashes and have nowhere to log in. This is the first item on
 the list that adds a *capability* rather than fixing something, which is why it's here
@@ -464,4 +465,5 @@ Phase 5   2 commits
 Phase 6   as you go
 ```
 
-Start at #1. Tell me when Phase 1 is done and we'll take Phase 2 onward together.
+Next session: start at #19 (`AuthModule` + `POST /auth/login`), then #20 (global guard +
+`@Public()`). Same rule as before — one item, run it, see it work, commit.
