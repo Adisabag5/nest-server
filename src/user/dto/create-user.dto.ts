@@ -2,7 +2,7 @@ import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class CreateUserDto {
   @IsEmail()
-  @MaxLength(100) // matches the column length
+  @MaxLength(100)
   email!: string;
 
   @IsString()
