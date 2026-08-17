@@ -24,11 +24,11 @@ import { validateEnv } from './config/env.validation';
         password: config.get<string>('DB_PASSWORD'),
         database: config.get<string>('DB_NAME'),
         synchronize: true,
-        autoLoadEntities: true
-      })
+        autoLoadEntities: true,
+      }),
     }),
 
-    UserModule
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],

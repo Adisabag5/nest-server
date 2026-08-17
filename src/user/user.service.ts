@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -8,21 +12,20 @@ import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UserService {
-
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
   ) {}
 
   async create(createUserDto: CreateUserDto) {
-    const { email, password } = createUserDto
+    const { email, password } = createUserDto;
 
     // user email exist?
-    const existing = await this.userRepo.findOneBy({ email })
+    const existing = await this.userRepo.findOneBy({ email });
     if (existing) throw new ConflictException('Email already registered');
 
     // hash password
-    const passwordHash = await bcrypt.hash(password, 10)
+    const passwordHash = await bcrypt.hash(password, 10);
 
     // create() builds a real User instance — save() on a plain object literal
     // returns a plain object, and @Exclude() metadata only applies to instances
@@ -60,6 +63,7 @@ export class UserService {
 
   async remove(id: string) {
     const result = await this.userRepo.delete(id);
-    if (result.affected === 0) throw new NotFoundException(`User ${id} not found`);
+    if (result.affected === 0)
+      throw new NotFoundException(`User ${id} not found`);
   }
 }

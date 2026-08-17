@@ -10,6 +10,7 @@ import { App } from 'supertest/types';
 import { AppController } from './../src/app.controller';
 import { AppService } from './../src/app.service';
 import { ProfilesModule } from './../src/profiles/profiles.module';
+import { Profile } from './../src/profiles/profiles.service';
 
 // The fixture composes only the DB-free parts of the app instead of importing
 // AppModule, which would open a MySQL connection. A test that depends on
@@ -35,7 +36,9 @@ describe('App (e2e)', () => {
         transform: true,
       }),
     );
-    app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+    app.useGlobalInterceptors(
+      new ClassSerializerInterceptor(app.get(Reflector)),
+    );
 
     await app.init();
   });
@@ -45,14 +48,20 @@ describe('App (e2e)', () => {
   });
 
   it('/ (GET)', () => {
-    return request(app.getHttpServer()).get('/').expect(200).expect('Hello World!');
+    return request(app.getHttpServer())
+      .get('/')
+      .expect(200)
+      .expect('Hello World!');
   });
 
   it('/profiles (GET) returns the seeded profiles', async () => {
-    const response = await request(app.getHttpServer()).get('/profiles').expect(200);
+    const response = await request(app.getHttpServer())
+      .get('/profiles')
+      .expect(200);
 
-    expect(Array.isArray(response.body)).toBe(true);
-    expect(response.body.length).toBeGreaterThan(0);
+    const profiles = response.body as Profile[];
+    expect(Array.isArray(profiles)).toBe(true);
+    expect(profiles.length).toBeGreaterThan(0);
   });
 
   it('/profiles (POST) rejects a body that fails validation', () => {
@@ -67,22 +76,25 @@ describe('App (e2e)', () => {
   });
 
   it('/profiles/:id (GET) is a 404 for an unknown id', () => {
-    return request(app.getHttpServer()).get('/profiles/does-not-exist').expect(404);
+    return request(app.getHttpServer())
+      .get('/profiles/does-not-exist')
+      .expect(404);
   });
 
   it('/profiles (POST then PUT) merges without letting the body rewrite the id', async () => {
-    const created = await request(app.getHttpServer())
+    const createResponse = await request(app.getHttpServer())
       .post('/profiles')
       .send({ name: 'Ada', description: 'Engineer' })
       .expect(201);
+    const created = createResponse.body as Profile;
 
-    const updated = await request(app.getHttpServer())
-      .put(`/profiles/${created.body.id}`)
+    const updateResponse = await request(app.getHttpServer())
+      .put(`/profiles/${created.id}`)
       .send({ name: 'Ada Lovelace' })
       .expect(200);
 
-    expect(updated.body).toEqual({
-      id: created.body.id,
+    expect(updateResponse.body).toEqual({
+      id: created.id,
       name: 'Ada Lovelace',
       description: 'Engineer',
     });

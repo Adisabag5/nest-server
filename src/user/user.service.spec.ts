@@ -28,8 +28,10 @@ describe('UserService', () => {
       find: jest.fn(),
       findOneBy: jest.fn(),
       // create() mirrors TypeORM: build a real User instance from a partial
-      create: jest.fn((dto) => Object.assign(new User(), dto)),
-      save: jest.fn((user) => Promise.resolve(user)),
+      create: jest.fn((dto: Partial<User>): User =>
+        Object.assign(new User(), dto),
+      ),
+      save: jest.fn((user: User): Promise<User> => Promise.resolve(user)),
       delete: jest.fn(),
     };
 
@@ -68,7 +70,9 @@ describe('UserService', () => {
       });
 
       expect(created.passwordHash).not.toBe('password123');
-      expect(await bcrypt.compare('password123', created.passwordHash)).toBe(true);
+      expect(await bcrypt.compare('password123', created.passwordHash)).toBe(
+        true,
+      );
       // it must be a real User instance, or @Exclude() cannot hide the hash
       expect(created).toBeInstanceOf(User);
     });
@@ -78,7 +82,9 @@ describe('UserService', () => {
     it('throws 404 when the user is missing', async () => {
       repo.findOneBy.mockResolvedValue(null);
 
-      await expect(service.findOne('999')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findOne('999')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
 
     it('returns the user when it exists', async () => {
@@ -115,7 +121,9 @@ describe('UserService', () => {
       const updated = await service.update('1', { password: 'brand-new-pass' });
 
       expect(updated.passwordHash).not.toBe('brand-new-pass');
-      expect(await bcrypt.compare('brand-new-pass', updated.passwordHash)).toBe(true);
+      expect(await bcrypt.compare('brand-new-pass', updated.passwordHash)).toBe(
+        true,
+      );
     });
   });
 
@@ -123,7 +131,9 @@ describe('UserService', () => {
     it('throws 404 when nothing was deleted', async () => {
       repo.delete.mockResolvedValue({ affected: 0 });
 
-      await expect(service.remove('999')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.remove('999')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
 
     it('resolves when a row was deleted', async () => {

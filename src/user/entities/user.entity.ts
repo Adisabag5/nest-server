@@ -1,24 +1,26 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+} from 'typeorm';
 import { Exclude } from 'class-transformer';
 
 @Entity('users')
 export class User {
-    @PrimaryGeneratedColumn({ type: 'bigint' })
-    id!: string;
+  @PrimaryGeneratedColumn({ type: 'bigint' })
+  id!: string;
 
-    @Column({
-        unique: true,
-        length: 100
-    })
-    email!: string;
+  @Column({
+    unique: true,
+    length: 100,
+  })
+  email!: string;
 
-    @Exclude()
-    @Column({ name: 'password_hash' })
-    passwordHash!: string;
+  @Exclude()
+  @Column({ name: 'password_hash' })
+  passwordHash!: string;
 
-    @CreateDateColumn({ name: 'created_at' })
-    createdAt!: Date;
-
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt!: Date;
 }
-
-
