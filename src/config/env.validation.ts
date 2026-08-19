@@ -4,6 +4,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  MinLength,
   Max,
   Min,
   validateSync,
@@ -40,17 +41,26 @@ export class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   DB_NAME!: string;
+
+  // a short secret is a guessable secret — the token signature is only as
+  // strong as this string
+  @IsString()
+  @MinLength(32)
+  JWT_SECRET!: string;
+
+  // ms-style duration accepted by @nestjs/jwt, e.g. '15m', '1h', '7d'
+  @IsString()
+  @IsNotEmpty()
+  JWT_EXPIRES_IN!: string;
 }
 
 export function validateEnv(config: Record<string, unknown>) {
   const validated = plainToInstance(EnvironmentVariables, config, {
-    // every env value is a string; coerce it to the declared property type
     enableImplicitConversion: true,
   });
 
   const errors = validateSync(validated, { skipMissingProperties: false });
   if (errors.length > 0) {
-    // never interpolate the values themselves — they are secrets
     const keys = errors.map((error) => error.property).join(', ');
     throw new Error(`Invalid or missing environment variables: ${keys}`);
   }

@@ -19,22 +19,27 @@ export class UserService {
 
   async create(createUserDto: CreateUserDto) {
     const { email, password } = createUserDto;
-
-    // user email exist?
     const existing = await this.userRepo.findOneBy({ email });
+
     if (existing) throw new ConflictException('Email already registered');
 
-    // hash password
     const passwordHash = await bcrypt.hash(password, 10);
-
-    // create() builds a real User instance — save() on a plain object literal
-    // returns a plain object, and @Exclude() metadata only applies to instances
     const user = this.userRepo.create({ email, passwordHash });
+
     return this.userRepo.save(user);
   }
 
   findAll() {
     return this.userRepo.find();
+  }
+
+  /**
+   * Login's lookup: returns null instead of throwing, because a failed login
+   * must answer 401 whether the email is unknown or the password is wrong.
+   * A 404 here would turn the route into an account-enumeration oracle.
+   */
+  findByEmail(email: string) {
+    return this.userRepo.findOneBy({ email });
   }
 
   async findOne(id: string) {
@@ -48,14 +53,12 @@ export class UserService {
     const user = await this.findOne(id);
     const { email, password } = updateUserDto;
 
-    // changing the email has to respect the same uniqueness rule as create()
     if (email && email !== user.email) {
       const existing = await this.userRepo.findOneBy({ email });
       if (existing) throw new ConflictException('Email already registered');
       user.email = email;
     }
 
-    // the DTO carries a plain password; the column stores a hash
     if (password) user.passwordHash = await bcrypt.hash(password, 10);
 
     return this.userRepo.save(user);
