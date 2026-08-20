@@ -1,13 +1,23 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { IsNull, LessThan, Repository } from 'typeorm';
+import { createHash, randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { UserService } from '../user/user.service';
 import { CreateUserDto } from '../user/dto/create-user.dto';
 import { User } from '../user/entities/user.entity';
+import { RefreshToken, RevokeReason } from './entities/refresh-token';
 
 export interface AuthResponse {
   access_token: string;
   user: User;
+}
+
+export interface AuthSession extends AuthResponse {
+  refresh_token: string;
+  refresh_expires_at: Date;
 }
 
 @Injectable()
@@ -15,51 +25,130 @@ export class AuthService {
   constructor(
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
+    private readonly config: ConfigService,
+    @InjectRepository(RefreshToken)
+    private readonly refreshRepo: Repository<RefreshToken>,
   ) {}
 
-  async signIn(email: string, password: string): Promise<AuthResponse> {
+  async signIn(email: string, password: string): Promise<AuthSession> {
     const user = await this.userService.findByEmail(email);
-
-    // compare() re-hashes the candidate with the stored salt; the plain
-    // password can never equal the stored hash directly
     const passwordMatches =
       user !== null && (await bcrypt.compare(password, user.passwordHash));
 
-    // ONE generic error for both "no such email" and "wrong password" — telling
-    // them apart turns this route into an account-enumeration oracle
     if (!passwordMatches)
       throw new UnauthorizedException('Invalid credentials');
 
-    return this.issueToken(user);
+    return this.startSession(user);
   }
 
-  /**
-   * Account creation is a UserService concern; auth only adds the token.
-   * Reusing create() keeps one copy of the hashing rules and the 409.
-   */
-  async signup(createUserDto: CreateUserDto): Promise<AuthResponse> {
+  async signup(createUserDto: CreateUserDto): Promise<AuthSession> {
     const user = await this.userService.create(createUserDto);
 
-    return this.issueToken(user);
+    return this.startSession(user);
   }
 
-  /**
-   * A JWT is stateless: the server holds no session to destroy, and a signed
-   * token stays valid until it expires. So sign-out is the client discarding
-   * its token. Real revocation needs a denylist (or short-lived access tokens
-   * plus refresh tokens) — deliberately out of scope here.
-   */
-  signOut(): { message: string } {
-    return { message: 'Signed out — discard the access token on the client.' };
+  async refresh(presentedToken: string): Promise<AuthSession> {
+    const stored = await this.refreshRepo.findOne({
+      where: { tokenHash: this.hash(presentedToken) },
+      relations: { user: true },
+    });
+
+    if (!stored) throw new UnauthorizedException('Invalid refresh token');
+
+    if (stored.revokedAt !== null) {
+      if (stored.revokedReason === RevokeReason.ROTATED) {
+        await this.revokeAllForUser(stored.userId);
+        throw new UnauthorizedException('Refresh token reuse detected');
+      }
+
+      throw new UnauthorizedException('Refresh token revoked');
+    }
+
+    if (stored.expiresAt.getTime() <= Date.now()) {
+      throw new UnauthorizedException('Refresh token expired');
+    }
+
+    await this.revoke(stored, RevokeReason.ROTATED);
+
+    return this.startSession(stored.user);
   }
 
-  private async issueToken(user: User): Promise<AuthResponse> {
-    // `sub` is the JWT standard claim for "who this token is about"
-    const payload = { sub: user.id, email: user.email };
+  async signOut(presentedToken: string): Promise<{ message: string }> {
+    const stored = await this.refreshRepo.findOneBy({
+      tokenHash: this.hash(presentedToken),
+    });
 
-    return {
-      access_token: await this.jwtService.signAsync(payload),
-      user,
+    if (stored && stored.revokedAt === null)
+      await this.revoke(stored, RevokeReason.SIGNED_OUT);
+
+    return { message: 'Signed out.' };
+  }
+
+  async revokeAllForUser(userId: string): Promise<void> {
+    await this.refreshRepo.update(
+      { userId, revokedAt: IsNull() },
+      { revokedAt: new Date(), revokedReason: RevokeReason.SIGNED_OUT },
+    );
+  }
+
+  async purgeExpired(): Promise<number> {
+    const result = await this.refreshRepo.delete({
+      expiresAt: LessThan(new Date()),
+    });
+
+    return result.affected ?? 0;
+  }
+
+  private async startSession(user: User): Promise<AuthSession> {
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      jti: randomUUID(),
     };
+    const access_token = await this.jwtService.signAsync(payload);
+
+    const refresh_token = await this.jwtService.signAsync(
+      { sub: user.id, jti: randomUUID() },
+      {
+        secret: this.config.get<string>('JWT_REFRESH_SECRET')!,
+        expiresIn: this.config.get<string>(
+          'JWT_REFRESH_EXPIRES_IN',
+        ) as JwtSignOptions['expiresIn'],
+      },
+    );
+
+    const refresh_expires_at = this.expiryOf(refresh_token);
+
+    await this.refreshRepo.save(
+      this.refreshRepo.create({
+        userId: user.id,
+        tokenHash: this.hash(refresh_token),
+        expiresAt: refresh_expires_at,
+        revokedAt: null,
+        revokedReason: null,
+      }),
+    );
+
+    return { access_token, refresh_token, refresh_expires_at, user };
+  }
+
+  private async revoke(
+    token: RefreshToken,
+    reason: RevokeReason,
+  ): Promise<void> {
+    token.revokedAt = new Date();
+    token.revokedReason = reason;
+    await this.refreshRepo.save(token);
+  }
+
+  private hash(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private expiryOf(token: string): Date {
+    const { exp } = this.jwtService.decode<{ exp: number }>(token);
+
+    return new Date(exp * 1000);
   }
 }

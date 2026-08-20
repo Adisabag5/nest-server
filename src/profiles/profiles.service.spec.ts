@@ -45,7 +45,7 @@ describe('ProfilesService', () => {
     const updated = service.updateProfile(created.id, { name: 'Ada Lovelace' });
 
     expect(updated.name).toBe('Ada Lovelace');
-    expect(updated.description).toBe('Engineer'); // untouched field survives
+    expect(updated.description).toBe('Engineer');
   });
 
   it('keeps the URL id even if the body carries another one', () => {
@@ -54,7 +54,6 @@ describe('ProfilesService', () => {
       description: 'Engineer',
     });
 
-    // a client trying to rewrite identity through the payload
     const updated = service.updateProfile(created.id, {
       id: 'hijacked',
     } as unknown as UpdateProfileDto);

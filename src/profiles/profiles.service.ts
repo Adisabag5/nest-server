@@ -41,7 +41,6 @@ export class ProfilesService {
     if (profileIndex === -1)
       throw new NotFoundException(`Profile ${id} not found`);
 
-    // the URL owns the identity — the body may never rewrite it
     this.profiles[profileIndex] = {
       ...this.profiles[profileIndex],
       ...profile,

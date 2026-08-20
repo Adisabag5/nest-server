@@ -33,11 +33,6 @@ export class UserService {
     return this.userRepo.find();
   }
 
-  /**
-   * Login's lookup: returns null instead of throwing, because a failed login
-   * must answer 401 whether the email is unknown or the password is wrong.
-   * A 404 here would turn the route into an account-enumeration oracle.
-   */
   findByEmail(email: string) {
     return this.userRepo.findOneBy({ email });
   }

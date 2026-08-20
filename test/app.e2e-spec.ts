@@ -12,10 +12,6 @@ import { AppService } from './../src/app.service';
 import { ProfilesModule } from './../src/profiles/profiles.module';
 import { Profile } from './../src/profiles/profiles.service';
 
-// The fixture composes only the DB-free parts of the app instead of importing
-// AppModule, which would open a MySQL connection. A test that depends on
-// ambient state can't own its verdict — a failure has to mean *our code* broke,
-// not "maybe MySQL isn't running".
 describe('App (e2e)', () => {
   let app: INestApplication<App>;
 
@@ -28,7 +24,6 @@ describe('App (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
 
-    // mirror main.ts, so the e2e exercises the real request pipeline
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,

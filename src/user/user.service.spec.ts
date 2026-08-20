@@ -4,6 +4,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { UserService } from './user.service';
 import { User } from './entities/user.entity';
+import { Role } from '../auth/enums/roles.enum';
 
 describe('UserService', () => {
   let service: UserService;
@@ -20,6 +21,7 @@ describe('UserService', () => {
       id: '1',
       email: 'taken@example.com',
       passwordHash: 'stored-hash',
+      role: Role.USER,
       createdAt: new Date(),
     });
 
@@ -27,7 +29,6 @@ describe('UserService', () => {
     repo = {
       find: jest.fn(),
       findOneBy: jest.fn(),
-      // create() mirrors TypeORM: build a real User instance from a partial
       create: jest.fn((dto: Partial<User>): User =>
         Object.assign(new User(), dto),
       ),
@@ -38,8 +39,6 @@ describe('UserService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UserService,
-        // UserService asks the container for Repository<User>; in a test we
-        // register a fake under the same token and the service never notices
         { provide: getRepositoryToken(User), useValue: repo },
       ],
     }).compile();
@@ -73,8 +72,8 @@ describe('UserService', () => {
       expect(await bcrypt.compare('password123', created.passwordHash)).toBe(
         true,
       );
-      // it must be a real User instance, or @Exclude() cannot hide the hash
       expect(created).toBeInstanceOf(User);
+      expect(created.role).toBe(Role.USER);
     });
   });
 
@@ -106,8 +105,8 @@ describe('UserService', () => {
 
     it('throws 409 when the new email belongs to someone else', async () => {
       repo.findOneBy
-        .mockResolvedValueOnce(existingUser()) // lookup by id
-        .mockResolvedValueOnce(Object.assign(new User(), { id: '2' })); // email is taken
+        .mockResolvedValueOnce(existingUser())
+        .mockResolvedValueOnce(Object.assign(new User(), { id: '2' }));
 
       await expect(
         service.update('1', { email: 'someone-else@example.com' }),

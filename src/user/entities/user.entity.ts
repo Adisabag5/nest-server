@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
+import { Role } from '../../auth/enums/roles.enum';
 
 @Entity('users')
 export class User {
@@ -20,6 +21,9 @@ export class User {
   @Exclude()
   @Column({ name: 'password_hash' })
   passwordHash!: string;
+
+  @Column({ type: 'enum', enum: Role, default: Role.USER })
+  role: Role = Role.USER;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;

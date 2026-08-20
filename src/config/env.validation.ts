@@ -10,11 +10,6 @@ import {
   validateSync,
 } from 'class-validator';
 
-/**
- * The shape the app requires from the environment. Same trick as the DTOs:
- * the decorators survive compilation as metadata, so they can be checked at
- * runtime — here, once, at boot.
- */
 export class EnvironmentVariables {
   @IsOptional()
   @IsInt()
@@ -42,16 +37,29 @@ export class EnvironmentVariables {
   @IsNotEmpty()
   DB_NAME!: string;
 
-  // a short secret is a guessable secret — the token signature is only as
-  // strong as this string
   @IsString()
   @MinLength(32)
   JWT_SECRET!: string;
 
-  // ms-style duration accepted by @nestjs/jwt, e.g. '15m', '1h', '7d'
   @IsString()
   @IsNotEmpty()
   JWT_EXPIRES_IN!: string;
+
+  @IsString()
+  @MinLength(32)
+  JWT_REFRESH_SECRET!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  JWT_REFRESH_EXPIRES_IN!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  CORS_ORIGIN!: string;
+
+  @IsOptional()
+  @IsString()
+  NODE_ENV?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

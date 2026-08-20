@@ -18,8 +18,6 @@ import { AuthModule } from './auth/auth.module';
       useFactory: (config: ConfigService) => ({
         type: 'mysql',
         host: config.get<string>('DB_HOST'),
-        // Number(), not config.get<number>() — the generic is an assertion,
-        // not a conversion, and env values are always strings
         port: Number(config.get('DB_PORT')),
         username: config.get<string>('DB_USER'),
         password: config.get<string>('DB_PASSWORD'),
