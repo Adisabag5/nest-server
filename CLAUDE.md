@@ -3,6 +3,10 @@
 Learning project: a small NestJS REST server. Owner: Adi. Goal is learning Nest
 fundamentals (modules / controllers / services / DI / DTOs / TypeORM), not production.
 
+It is the backend for **Pulse** (`~/DEV/visual-sequencer`), an Angular + Tone.js step
+sequencer for making beats. The server owns identity, profiles, and saved work; the
+frontend owns the pattern format.
+
 **How to use this file:** it is the index. Read it first, then open only the 1–3 files
 you need from the map below. Do not scan `src/` or run `find`. Never read
 `node_modules/`, `dist/`, `pnpm-lock.yaml`.
@@ -25,6 +29,7 @@ NestJS 11 · TypeORM + MySQL (`mysql2`) · `@nestjs/config` · `bcrypt` · `clas
 | lint / format | `pnpm lint` / `pnpm format` (prettier: single quotes, trailing commas) |
 | scaffold | `nest g resource <name>` |
 | promote/demote a user | `pnpm set-role <email> <ADMIN\|USER>` |
+| typecheck everything | `npx tsc --noEmit` (`pnpm build` skips `*.spec.ts`) |
 
 ## File map
 
@@ -48,13 +53,20 @@ src/
     guards/jwt-auth.guard.ts    global guard; lets @Public() routes through
     guards/jwt-refresh.guard.ts protects /auth/refresh + /auth/signout via the cookie
     decorators/public.decorator.ts  @Public() -> SetMetadata(IS_PUBLIC_KEY, true)
+    decorators/current-user.decorator.ts  @CurrentUser() -> request.user ({id,email,role})
     enums/roles.enum.ts    Role.ADMIN / Role.USER (used by the entity and @Roles)
-  profiles/                IN-MEMORY module (no DB) — the "learn the basics" module
-    profiles.controller.ts CRUD routes under /profiles
-    profiles.service.ts    Profile[] array seeded with 3 records; exports `Profile` interface
-    profiles.module.ts
-    dto/create-profile.dto.ts   (class-validator decorators)
-    dto/update-profile.dto.ts   PartialType(CreateProfileDto)
+  profile/                 one profile per user, created with the user
+    profile.controller.ts  GET/PATCH /profiles/me, GET /profiles/:username
+    profile.service.ts     username allocation + uniqueness; createForUser(manager,…)
+    entities/profile.entity.ts  @Entity('profiles'); 1:1 User, unique username
+  collection/              named containers for a user's beats
+    collection.controller.ts  CRUD under /collections
+    collection.service.ts  every method scoped by userId; 403 on someone else's row
+    entities/collection.entity.ts  @Entity('collections'); unique (user_id, name)
+  beat/                    STUB — a saved pattern; Adi will finish this
+    beat.controller.ts     CRUD under /beats, ?collectionId= filter
+    beat.service.ts        ownership checks, data.version + size validation
+    entities/beat.entity.ts  @Entity('beats'); json `data` column
   user/                    DB-BACKED module (TypeORM) — the "learn persistence" module
     user.controller.ts     CRUD routes under /user
     user.service.ts        full CRUD; hashes passwords, 409 on duplicate email, 404 on missing;
@@ -75,11 +87,15 @@ test/auth.e2e-spec.ts      e2e for signup/signin/guard with an in-memory fake re
 | POST | `/auth/signin` | AuthService.signIn | `@Public()`; **200** (nothing created); 401 on bad credentials |
 | POST | `/auth/refresh` | AuthService.refresh | `@Public()` + `JwtRefreshGuard`; **200**; rotates the cookie |
 | POST | `/auth/signout` | AuthService.signOut | cookie-authenticated; revokes **this** session only |
-| GET | `/profiles` | ProfilesService.findAll | in-memory |
-| GET | `/profiles/:id` | findOne | |
-| POST | `/profiles` | createProfile | returns created profile |
-| PUT | `/profiles/:id` | updateProfile | merges; URL id wins, 404 if missing |
-| DELETE | `/profiles/:id` | deleteProfile | |
+| GET | `/profiles/me` | ProfileService.findByUserId | own profile |
+| PATCH | `/profiles/me` | update | 409 if the username is taken |
+| GET | `/profiles/:username` | findByUsername | 404 if missing |
+| POST | `/collections` | CollectionService.create | 409 on a duplicate name for that user |
+| GET | `/collections` | findAllForUser | only the caller's |
+| GET/PATCH/DELETE | `/collections/:id` | | 404 if missing, **403** if not yours; DELETE is 204 |
+| POST | `/beats` | BeatService.create | 400 unless `data.version` is a positive int |
+| GET | `/beats` | findAllForUser | `?collectionId=` filters |
+| GET/PATCH/DELETE | `/beats/:id` | | 404 if missing, **403** if not yours; DELETE is 204 |
 | POST | `/user` | UserService.create | hashes password (bcrypt, 10 rounds); 409 on duplicate email |
 | GET | `/user` | findAll | |
 | GET | `/user/:id` | findOne | 404 if missing |
@@ -143,7 +159,34 @@ The JWT payload carries `{ sub, email, role }`, so `request.user.role` is availa
 guards without a DB read — at the cost of a role change not taking effect until the
 user's current token expires.
 
-`Profile` (interface, in-memory only): `id` uuid · `name` · `description`
+`profiles`: `id` · `user_id` unique FK→users (CASCADE) · `username` unique varchar(30),
+lowercase/digits/underscore · `display_name` · `bio` (280, null) · `avatar_url` (null) ·
+timestamps. **Created inside the same transaction as the user** (`UserService.create`), so
+every user always has one and the frontend never handles a missing profile. The username
+is derived from the email local part, sanitised, and suffixed until free.
+
+`collections`: `id` · `user_id` FK→users (CASCADE) · `name` varchar(60) · `description`
+(280, null) · timestamps. Unique on `(user_id, name)` — two users may both have "Lo-fi".
+
+`beats` (**stub — Adi is finishing this**): `id` · `user_id` FK→users (CASCADE) ·
+`collection_id` FK→collections (**SET NULL**, so deleting a collection unfiles its beats
+rather than destroying work) · `title` varchar(100) · `data` **json** · timestamps.
+
+`data` holds Pulse's `SavedState` v2 verbatim — `{version, bpm, activeKit, tracks[]}`,
+defined in `visual-sequencer/src/app/state/storage.service.ts`. The server stores it
+**opaquely**: it validates only that `version` is a positive integer and that the payload
+is under 256 KB. The frontend owns that schema and its migrations, so modelling tracks and
+steps relationally here would mean a server change for every frontend tweak. Note this
+also means `data` must NOT be validated as a nested DTO — the global `whitelist` would
+strip every property that isn't declared.
+
+**Naming caveat:** Pulse's glossary (`visual-sequencer/claude-docs/02-glossary.md`, marked
+Locked) calls the saved unit a **Pattern** and lists "beat" as a term to avoid. `Beat` is
+used here because Adi asked for it and it names a new concept (a *titled, owned* pattern),
+but confirm before the frontend integrates — renaming later is a migration.
+
+Ownership is enforced in the services, not a guard: every collection/beat method takes the
+caller's id and throws `ForbiddenException` on someone else's row.
 
 ## Config
 
@@ -183,6 +226,15 @@ are namespaced and validated at boot, and the tests assert behavior.
 **Phase 5 (auth) is done too**: signup/signin/signout issue and verify JWTs, and a global
 guard protects everything not marked `@Public()`. `pnpm test` 31 unit, `pnpm test:e2e` 16
 e2e, neither needs a live MySQL.
+
+**Pulse domain (2026-08-20)**: profiles, collections and a stub beats module are in, with
+ownership checks and 55 unit + 17 e2e tests. Open questions for Adi:
+1. `Beat` vs `Pattern` naming — see the caveat under Data model.
+2. `GET /profiles/:username` currently requires a token. If Pulse wants public profile
+   pages, it needs `@Public()` — and then a decision about what a stranger may see.
+3. Beats are one-to-one with a collection (`collection_id`, nullable). If a beat should
+   ever live in several collections, that becomes a join table.
+4. No pagination anywhere — `GET /beats` returns every beat the user owns.
 
 Remaining — Phase 6 (production shape), plus auth follow-ups:
 

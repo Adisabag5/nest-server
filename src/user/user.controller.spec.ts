@@ -1,28 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
-import { User } from './entities/user.entity';
 
 describe('UserController', () => {
   let controller: UserController;
+  let userService: Record<string, jest.Mock>;
 
   beforeEach(async () => {
+    userService = {
+      create: jest.fn(),
+      findAll: jest.fn(),
+      findOne: jest.fn(),
+      update: jest.fn(),
+      remove: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UserController],
-      providers: [
-        UserService,
-        {
-          provide: getRepositoryToken(User),
-          useValue: {
-            find: jest.fn(),
-            findOneBy: jest.fn(),
-            create: jest.fn(),
-            save: jest.fn(),
-            delete: jest.fn(),
-          },
-        },
-      ],
+      providers: [{ provide: UserService, useValue: userService }],
     }).compile();
 
     controller = module.get<UserController>(UserController);
@@ -30,5 +25,11 @@ describe('UserController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  it('passes the id straight through as a string', async () => {
+    await controller.findOne('42');
+
+    expect(userService.findOne).toHaveBeenCalledWith('42');
   });
 });

@@ -5,6 +5,8 @@ import * as bcrypt from 'bcrypt';
 import { UserService } from './user.service';
 import { User } from './entities/user.entity';
 import { Role } from '../auth/enums/roles.enum';
+import { DataSource } from 'typeorm';
+import { ProfileService } from '../profile/profile.service';
 
 describe('UserService', () => {
   let service: UserService;
@@ -15,6 +17,9 @@ describe('UserService', () => {
     save: jest.Mock;
     delete: jest.Mock;
   };
+
+  let manager: { create: jest.Mock; save: jest.Mock };
+  let profileService: { createForUser: jest.Mock };
 
   const existingUser = (): User =>
     Object.assign(new User(), {
@@ -36,10 +41,28 @@ describe('UserService', () => {
       delete: jest.fn(),
     };
 
+    manager = {
+      create: jest.fn((_entity: unknown, dto: Partial<User>): User =>
+        Object.assign(new User(), dto),
+      ),
+      save: jest.fn((entity: User): Promise<User> => {
+        entity.id ||= '1';
+        return Promise.resolve(entity);
+      }),
+    };
+    profileService = { createForUser: jest.fn().mockResolvedValue({}) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UserService,
         { provide: getRepositoryToken(User), useValue: repo },
+        {
+          provide: DataSource,
+          useValue: {
+            transaction: (cb: (m: unknown) => unknown) => cb(manager),
+          },
+        },
+        { provide: ProfileService, useValue: profileService },
       ],
     }).compile();
 
@@ -57,7 +80,7 @@ describe('UserService', () => {
       await expect(
         service.create({ email: 'taken@example.com', password: 'password123' }),
       ).rejects.toBeInstanceOf(ConflictException);
-      expect(repo.save).not.toHaveBeenCalled();
+      expect(manager.save).not.toHaveBeenCalled();
     });
 
     it('stores a hash, never the plain password', async () => {
@@ -74,6 +97,21 @@ describe('UserService', () => {
       );
       expect(created).toBeInstanceOf(User);
       expect(created.role).toBe(Role.USER);
+    });
+
+    it('creates the profile in the same transaction', async () => {
+      repo.findOneBy.mockResolvedValue(null);
+
+      const created = await service.create({
+        email: 'new@example.com',
+        password: 'password123',
+      });
+
+      expect(profileService.createForUser).toHaveBeenCalledWith(
+        manager,
+        created.id,
+        created.email,
+      );
     });
   });
 

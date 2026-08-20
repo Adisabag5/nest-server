@@ -21,6 +21,9 @@ import { UserController } from './../src/user/user.controller';
 import { UserService } from './../src/user/user.service';
 import { User } from './../src/user/entities/user.entity';
 import { Role } from './../src/auth/enums/roles.enum';
+import { DataSource } from 'typeorm';
+import { ProfileService } from './../src/profile/profile.service';
+import { Profile } from './../src/profile/entities/profile.entity';
 
 const ACCESS_SECRET = 'access-secret-at-least-32-characters!!!';
 const REFRESH_SECRET = 'refresh-secret-at-least-32-characters!!';
@@ -36,8 +39,10 @@ const TEST_CONFIG: Record<string, string> = {
 function createFakes() {
   const users: User[] = [];
   const sessions: RefreshToken[] = [];
+  const profiles: Profile[] = [];
   let nextUserId = 1;
   let nextSessionId = 1;
+  let nextProfileId = 1;
 
   const match = <T extends object>(row: T, where: Partial<T>) =>
     Object.entries(where).every(
@@ -91,7 +96,39 @@ function createFakes() {
     delete: () => Promise.resolve({ affected: 0 }),
   };
 
-  return { userRepo, refreshRepo, sessions };
+  const profileRepo = {
+    findOneBy: (where: Partial<Profile>) =>
+      Promise.resolve(profiles.find((p) => match(p, where)) ?? null),
+    create: (dto: Partial<Profile>) => Object.assign(new Profile(), dto),
+    save: (row: Profile) => {
+      if (!row.id) {
+        row.id = String(nextProfileId++);
+        profiles.push(row);
+      }
+      return Promise.resolve(row);
+    },
+  };
+
+  // UserService.create() runs inside a transaction; this stands in for the
+  // EntityManager it hands to ProfileService
+  const manager = {
+    findOneBy: (_entity: unknown, where: Partial<Profile>) =>
+      Promise.resolve(profiles.find((p) => match(p, where)) ?? null),
+    create: (_entity: unknown, dto: Partial<User & Profile>) =>
+      dto.email !== undefined
+        ? Object.assign(new User(), dto)
+        : Object.assign(new Profile(), dto),
+    save: (row: User | Profile) => {
+      if (row instanceof User) return userRepo.save(row);
+      return profileRepo.save(row);
+    },
+  };
+
+  const dataSource = {
+    transaction: (cb: (m: unknown) => unknown) => cb(manager),
+  };
+
+  return { userRepo, refreshRepo, profileRepo, dataSource, sessions, profiles };
 }
 
 describe('Auth + refresh (e2e)', () => {
@@ -121,6 +158,9 @@ describe('Auth + refresh (e2e)', () => {
           useValue: { get: (key: string) => TEST_CONFIG[key] },
         },
         { provide: getRepositoryToken(User), useValue: fakes.userRepo },
+        { provide: getRepositoryToken(Profile), useValue: fakes.profileRepo },
+        ProfileService,
+        { provide: DataSource, useValue: fakes.dataSource },
         {
           provide: getRepositoryToken(RefreshToken),
           useValue: fakes.refreshRepo,
@@ -178,6 +218,14 @@ describe('Auth + refresh (e2e)', () => {
       expect(cookie).toContain('HttpOnly');
       expect(cookie).toContain('Path=/auth');
       expect(JSON.stringify(body)).not.toContain('refresh_token');
+    });
+
+    it('creates the profile alongside the user', async () => {
+      await signup().expect(201);
+
+      expect(fakes.profiles).toHaveLength(1);
+      expect(fakes.profiles[0].username).toBe('adi');
+      expect(fakes.profiles[0].userId).toBe('1');
     });
 
     it('rejects a duplicate email with 409', async () => {

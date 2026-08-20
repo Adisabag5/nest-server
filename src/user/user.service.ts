@@ -7,7 +7,8 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
-import { Repository } from 'typeorm';
+import { ProfileService } from '../profile/profile.service';
+import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -15,6 +16,8 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    private readonly dataSource: DataSource,
+    private readonly profileService: ProfileService,
   ) {}
 
   async create(createUserDto: CreateUserDto) {
@@ -24,9 +27,15 @@ export class UserService {
     if (existing) throw new ConflictException('Email already registered');
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = this.userRepo.create({ email, passwordHash });
 
-    return this.userRepo.save(user);
+    return this.dataSource.transaction(async (manager) => {
+      const user = await manager.save(
+        manager.create(User, { email, passwordHash }),
+      );
+      await this.profileService.createForUser(manager, user.id, user.email);
+
+      return user;
+    });
   }
 
   findAll() {

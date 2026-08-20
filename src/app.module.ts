@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ProfilesModule } from './profiles/profiles.module';
+import { ProfileModule } from './profile/profile.module';
+import { CollectionModule } from './collection/collection.module';
+import { BeatModule } from './beat/beat.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './user/user.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -10,7 +12,9 @@ import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
-    ProfilesModule,
+    ProfileModule,
+    CollectionModule,
+    BeatModule,
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
 
     TypeOrmModule.forRootAsync({
