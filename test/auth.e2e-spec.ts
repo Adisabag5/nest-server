@@ -51,6 +51,8 @@ function createFakes() {
 
   const userRepo = {
     find: () => Promise.resolve(users),
+    findAndCount: ({ skip = 0, take = 20 }: { skip?: number; take?: number }) =>
+      Promise.resolve([users.slice(skip, skip + take), users.length]),
     findOneBy: (where: Partial<User>) =>
       Promise.resolve(users.find((u) => match(u, where)) ?? null),
     create: (dto: Partial<User>) => Object.assign(new User(), dto),

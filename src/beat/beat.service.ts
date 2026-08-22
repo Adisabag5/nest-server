@@ -10,6 +10,8 @@ import { Beat, BeatData } from './entities/beat.entity';
 import { CreateBeatDto } from './dto/create-beat.dto';
 import { UpdateBeatDto } from './dto/update-beat.dto';
 import { CollectionService } from '../collection/collection.service';
+import { paginate, Paginated } from '../common/pagination';
+import { FindBeatsQueryDto } from './dto/find-beats-query.dto';
 
 const MAX_DATA_BYTES = 256 * 1024;
 
@@ -21,10 +23,15 @@ export class BeatService {
     private readonly collectionService: CollectionService,
   ) {}
 
-  findAllForUser(userId: string, collectionId?: string) {
-    return this.beatRepo.find({
+  findAllForUser(
+    userId: string,
+    query: FindBeatsQueryDto,
+  ): Promise<Paginated<Beat>> {
+    const { collectionId } = query;
+
+    return paginate(this.beatRepo, query, {
       where: collectionId ? { userId, collectionId } : { userId },
-      order: { updatedAt: 'DESC' },
+      order: { updatedAt: 'DESC', id: 'DESC' },
     });
   }
 

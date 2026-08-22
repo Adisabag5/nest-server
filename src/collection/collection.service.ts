@@ -9,6 +9,8 @@ import { Repository } from 'typeorm';
 import { Collection } from './entities/collection.entity';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { paginate, Paginated } from '../common/pagination';
 
 @Injectable()
 export class CollectionService {
@@ -17,10 +19,13 @@ export class CollectionService {
     private readonly collectionRepo: Repository<Collection>,
   ) {}
 
-  findAllForUser(userId: string) {
-    return this.collectionRepo.find({
+  findAllForUser(
+    userId: string,
+    query: PaginationQueryDto,
+  ): Promise<Paginated<Collection>> {
+    return paginate(this.collectionRepo, query, {
       where: { userId },
-      order: { createdAt: 'ASC' },
+      order: { createdAt: 'ASC', id: 'ASC' },
     });
   }
 

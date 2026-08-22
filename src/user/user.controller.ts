@@ -6,11 +6,13 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/enums/roles.enum';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -25,8 +27,8 @@ export class UserController {
   }
 
   @Get()
-  findAll() {
-    return this.userService.findAll();
+  findAll(@Query() query: PaginationQueryDto) {
+    return this.userService.findAll(query);
   }
 
   @Get(':id')

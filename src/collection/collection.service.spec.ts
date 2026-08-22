@@ -26,8 +26,19 @@ describe('CollectionService', () => {
     let nextId = 1;
 
     repo = {
-      find: jest.fn(({ where }: { where: Partial<Collection> }) =>
-        Promise.resolve(rows.filter((r) => match(r, where))),
+      findAndCount: jest.fn(
+        ({
+          where,
+          skip = 0,
+          take = 20,
+        }: {
+          where: Partial<Collection>;
+          skip?: number;
+          take?: number;
+        }) => {
+          const all = rows.filter((r) => match(r, where));
+          return Promise.resolve([all.slice(skip, skip + take), all.length]);
+        },
       ),
       findOneBy: jest.fn((where: Partial<Collection>) =>
         Promise.resolve(rows.find((r) => match(r, where)) ?? null),
@@ -110,9 +121,42 @@ describe('CollectionService', () => {
     await service.create(OWNER, { name: 'Mine' });
     await service.create(STRANGER, { name: 'Theirs' });
 
-    const listed = await service.findAllForUser(OWNER);
+    const listed = await service.findAllForUser(OWNER, { page: 1, limit: 20 });
 
-    expect(listed).toHaveLength(1);
-    expect(listed[0].name).toBe('Mine');
+    expect(listed.items).toHaveLength(1);
+    expect(listed.items[0].name).toBe('Mine');
+    expect(listed.meta.total).toBe(1);
+  });
+
+  it('paginates: page 2 of 3 collections at limit 2', async () => {
+    for (const name of ['A', 'B', 'C']) await service.create(OWNER, { name });
+
+    const first = await service.findAllForUser(OWNER, { page: 1, limit: 2 });
+    const second = await service.findAllForUser(OWNER, { page: 2, limit: 2 });
+
+    expect(first.items).toHaveLength(2);
+    expect(first.meta).toMatchObject({
+      total: 3,
+      totalPages: 2,
+      hasNext: true,
+      hasPrev: false,
+    });
+    expect(second.items).toHaveLength(1);
+    expect(second.meta).toMatchObject({ hasNext: false, hasPrev: true });
+    // no row appears on both pages
+    const ids = [...first.items, ...second.items].map((c) => c.id);
+    expect(new Set(ids).size).toBe(3);
+  });
+
+  it('reports zero pages for an empty list', async () => {
+    const empty = await service.findAllForUser(OWNER, { page: 1, limit: 20 });
+
+    expect(empty.items).toEqual([]);
+    expect(empty.meta).toMatchObject({
+      total: 0,
+      totalPages: 0,
+      hasNext: false,
+      hasPrev: false,
+    });
   });
 });

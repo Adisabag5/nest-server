@@ -8,6 +8,8 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { ProfileService } from '../profile/profile.service';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { paginate, Paginated } from '../common/pagination';
 import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
@@ -38,8 +40,8 @@ export class UserService {
     });
   }
 
-  findAll() {
-    return this.userRepo.find();
+  findAll(query: PaginationQueryDto): Promise<Paginated<User>> {
+    return paginate(this.userRepo, query, { order: { id: 'ASC' } });
   }
 
   findByEmail(email: string) {

@@ -8,10 +8,12 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CollectionService } from './collection.service';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
@@ -28,8 +30,11 @@ export class CollectionController {
   }
 
   @Get()
-  findAll(@CurrentUser() user: AuthenticatedUser) {
-    return this.collectionService.findAllForUser(user.id);
+  findAll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: PaginationQueryDto,
+  ) {
+    return this.collectionService.findAllForUser(user.id, query);
   }
 
   @Get(':id')

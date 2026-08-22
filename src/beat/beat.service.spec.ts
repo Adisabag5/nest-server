@@ -43,8 +43,19 @@ describe('BeatService', () => {
     let nextId = 1;
 
     const repo = {
-      find: jest.fn(({ where }: { where: Partial<Beat> }) =>
-        Promise.resolve(rows.filter((r) => match(r, where))),
+      findAndCount: jest.fn(
+        ({
+          where,
+          skip = 0,
+          take = 20,
+        }: {
+          where: Partial<Beat>;
+          skip?: number;
+          take?: number;
+        }) => {
+          const all = rows.filter((r) => match(r, where));
+          return Promise.resolve([all.slice(skip, skip + take), all.length]);
+        },
       ),
       findOneBy: jest.fn((where: Partial<Beat>) =>
         Promise.resolve(rows.find((r) => match(r, where)) ?? null),
@@ -156,9 +167,17 @@ describe('BeatService', () => {
     });
     await service.create(STRANGER, { title: 'C', data: savedState() });
 
-    expect(await service.findAllForUser(OWNER)).toHaveLength(2);
-    const filed = await service.findAllForUser(OWNER, '7');
-    expect(filed).toHaveLength(1);
-    expect(filed[0].title).toBe('B');
+    const mine = await service.findAllForUser(OWNER, { page: 1, limit: 20 });
+    expect(mine.items).toHaveLength(2);
+    expect(mine.meta.total).toBe(2);
+
+    const filed = await service.findAllForUser(OWNER, {
+      page: 1,
+      limit: 20,
+      collectionId: '7',
+    });
+    expect(filed.items).toHaveLength(1);
+    expect(filed.items[0].title).toBe('B');
+    expect(filed.meta.total).toBe(1);
   });
 });

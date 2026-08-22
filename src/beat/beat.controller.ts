@@ -13,6 +13,7 @@ import {
 import { BeatService } from './beat.service';
 import { CreateBeatDto } from './dto/create-beat.dto';
 import { UpdateBeatDto } from './dto/update-beat.dto';
+import { FindBeatsQueryDto } from './dto/find-beats-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
@@ -31,9 +32,9 @@ export class BeatController {
   @Get()
   findAll(
     @CurrentUser() user: AuthenticatedUser,
-    @Query('collectionId') collectionId?: string,
+    @Query() query: FindBeatsQueryDto,
   ) {
-    return this.beatService.findAllForUser(user.id, collectionId);
+    return this.beatService.findAllForUser(user.id, query);
   }
 
   @Get(':id')

@@ -40,6 +40,8 @@ src/
   app.controller.ts        GET / -> "Hello World!" (@Public)
   app.service.ts
   config/env.validation.ts EnvironmentVariables class + validateEnv(); fails boot on a bad .env
+  common/pagination.ts     paginate() + buildMeta(); the Paginated<T> shape
+  common/dto/pagination-query.dto.ts  ?page= &limit= (default 20, max 100)
   scripts/set-role.ts      CLI: promote/demote a user out of band (the first admin)
   auth/                    AUTH module — JWT issue + verify
     auth.controller.ts     POST /auth/signup, /auth/signin, /auth/refresh, /auth/signout
@@ -91,13 +93,13 @@ test/auth.e2e-spec.ts      e2e for signup/signin/guard with an in-memory fake re
 | PATCH | `/profiles/me` | update | 409 if the username is taken |
 | GET | `/profiles/:username` | findByUsername | 404 if missing |
 | POST | `/collections` | CollectionService.create | 409 on a duplicate name for that user |
-| GET | `/collections` | findAllForUser | only the caller's |
+| GET | `/collections` | findAllForUser | only the caller's; **paginated** |
 | GET/PATCH/DELETE | `/collections/:id` | | 404 if missing, **403** if not yours; DELETE is 204 |
 | POST | `/beats` | BeatService.create | 400 unless `data.version` is a positive int |
-| GET | `/beats` | findAllForUser | `?collectionId=` filters |
+| GET | `/beats` | findAllForUser | `?collectionId=` filters; **paginated** |
 | GET/PATCH/DELETE | `/beats/:id` | | 404 if missing, **403** if not yours; DELETE is 204 |
 | POST | `/user` | UserService.create | hashes password (bcrypt, 10 rounds); 409 on duplicate email |
-| GET | `/user` | findAll | |
+| GET | `/user` | findAll | **paginated** |
 | GET | `/user/:id` | findOne | 404 if missing |
 | PATCH | `/user/:id` | update | 404 if missing, 409 on duplicate email; re-hashes `password` |
 | DELETE | `/user/:id` | remove | 404 if missing |
@@ -142,6 +144,32 @@ reason `SignInDto` validates only "is an email / is non-empty", never the passwo
 
 All request bodies pass a global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`,
 `transform`), so an unknown property or a bad field is a `400` before the handler runs.
+
+## Pagination
+
+Every list endpoint (`GET /beats`, `/collections`, `/user`) returns
+
+```json
+{ "items": [...], "meta": { "total", "page", "limit", "totalPages", "hasNext", "hasPrev" } }
+```
+
+not a bare array. Query params are `?page=` (default 1) and `?limit=` (default 20, max
+100); anything invalid — `page=0`, `limit=101`, a non-number, or an undeclared param — is a
+400 from the global pipe, because the query is a DTO (`PaginationQueryDto`) like any body.
+
+Two things worth knowing:
+
+- **Offset-based, deliberately.** `page`/`limit` lets the frontend jump to any page and
+  show "20 of 143". The cost is that rows shift if the underlying data changes between
+  requests. Keyset (cursor) pagination avoids that and scales better, but can't jump to a
+  page or report a total — the wrong trade for a user's own library of beats.
+- **Ordering must be deterministic or pages leak rows.** Every paginated query ends with
+  `id` as a tiebreaker (`updatedAt DESC, id DESC` for beats), because MySQL is free to
+  return equal-sorting rows in any order, and then a row can appear on two pages or none.
+
+`ClassSerializerInterceptor` still strips `@Exclude()` fields inside `items` — the entities
+are nested in a plain wrapper, and class-transformer recurses into it. There is an e2e
+pinning that, since it is exactly the kind of thing that breaks silently.
 
 ## Data model
 
@@ -238,8 +266,8 @@ Decisions Adi settled on 2026-08-22 — treat these as closed, do not re-litigat
 3. **A beat belongs to exactly one collection** (`collection_id`, nullable while unfiled).
    No join table, no multi-collection membership.
 
-Still open:
-4. No pagination anywhere — `GET /beats` returns every beat the user owns.
+4. **Pagination** is in (2026-08-22): see the Pagination section. Adi is building the
+   frontend side against `{items, meta}`.
 
 Remaining — Phase 6 (production shape), plus auth follow-ups:
 
