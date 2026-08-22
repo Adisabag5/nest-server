@@ -180,10 +180,11 @@ steps relationally here would mean a server change for every frontend tweak. Not
 also means `data` must NOT be validated as a nested DTO — the global `whitelist` would
 strip every property that isn't declared.
 
-**Naming caveat:** Pulse's glossary (`visual-sequencer/claude-docs/02-glossary.md`, marked
-Locked) calls the saved unit a **Pattern** and lists "beat" as a term to avoid. `Beat` is
-used here because Adi asked for it and it names a new concept (a *titled, owned* pattern),
-but confirm before the frontend integrates — renaming later is a migration.
+**Naming — settled (2026-08-22):** `Beat` is the name, confirmed by Adi. Pulse's glossary
+(`visual-sequencer/claude-docs/02-glossary.md`, Locked) calls the saved unit a *Pattern*
+and lists "beat" as a term to avoid, but that entry is about **Step**, not about a titled
+and owned save. Server-side the noun is `Beat`; if the frontend adds its own type for it,
+add "Beat" to the glossary rather than renaming here.
 
 Ownership is enforced in the services, not a guard: every collection/beat method takes the
 caller's id and throws `ForbiddenException` on someone else's row.
@@ -228,12 +229,16 @@ guard protects everything not marked `@Public()`. `pnpm test` 31 unit, `pnpm tes
 e2e, neither needs a live MySQL.
 
 **Pulse domain (2026-08-20)**: profiles, collections and a stub beats module are in, with
-ownership checks and 55 unit + 17 e2e tests. Open questions for Adi:
-1. `Beat` vs `Pattern` naming — see the caveat under Data model.
-2. `GET /profiles/:username` currently requires a token. If Pulse wants public profile
-   pages, it needs `@Public()` — and then a decision about what a stranger may see.
-3. Beats are one-to-one with a collection (`collection_id`, nullable). If a beat should
-   ever live in several collections, that becomes a join table.
+ownership checks and 55 unit + 17 e2e tests.
+
+Decisions Adi settled on 2026-08-22 — treat these as closed, do not re-litigate:
+1. The entity is **`Beat`** (see Naming under Data model).
+2. **Profiles are never public.** Every `/profiles/*` route requires a token, including
+   `GET /profiles/:username`. Do not add `@Public()` to that controller.
+3. **A beat belongs to exactly one collection** (`collection_id`, nullable while unfiled).
+   No join table, no multi-collection membership.
+
+Still open:
 4. No pagination anywhere — `GET /beats` returns every beat the user owns.
 
 Remaining — Phase 6 (production shape), plus auth follow-ups:
