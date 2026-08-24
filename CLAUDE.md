@@ -226,6 +226,16 @@ committed schema. Keys: `PORT`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, 
 Auth adds `JWT_SECRET` (>= 32 chars), `JWT_EXPIRES_IN`, plus `JWT_REFRESH_SECRET`
 (a **different** secret, >= 32 chars), `JWT_REFRESH_EXPIRES_IN` (e.g. `7d`) and
 `CORS_ORIGIN` (comma-separated; `credentials: true` forbids `*`).
+**`NODE_ENV` is required** (`development` | `test` | `production`, enum-validated). Both
+the CORS allowlist and the refresh cookie's `secure`/`SameSite` flags key off it, so an
+unset value would silently accept every loopback origin *and* ship the cookie without
+`Secure`. It fails at boot instead. `start:prod` sets it explicitly; anything else reads
+it from `.env`.
+CORS (`src/config/cors.ts`) allows loopback origins only when `NODE_ENV` is
+`development` or `test` — an unrecognised value fails closed. Origins are parsed with
+`new URL()` rather than pattern-matched, so `https://localhost:4200` and
+`http://localhost` work while `localhost.evil.com` and `http://localhost:4200@evil.com`
+do not.
 `validateEnv` (`src/config/env.validation.ts`) checks them at boot, so a missing or
 malformed key fails startup instead of surfacing as a connection error later.
 Env values are always strings: use `Number(config.get('DB_PORT'))`, since

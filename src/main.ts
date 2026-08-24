@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { corsOriginChecker } from './config/cors';
+import { NodeEnv } from './config/env.validation';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -14,7 +15,7 @@ async function bootstrap() {
   app.enableCors({
     origin: corsOriginChecker(
       config.get<string>('CORS_ORIGIN')!,
-      config.get<string>('NODE_ENV'),
+      config.get<NodeEnv>('NODE_ENV')!,
     ),
     credentials: true,
   });
