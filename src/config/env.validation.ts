@@ -1,5 +1,6 @@
 import { plainToInstance } from 'class-transformer';
 import {
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -9,6 +10,17 @@ import {
   Min,
   validateSync,
 } from 'class-validator';
+
+/**
+ * Required, not optional. Both the CORS allowlist and the refresh cookie's
+ * secure/SameSite flags key off this value, so an unset NODE_ENV in a real
+ * deployment silently downgrades security rather than failing loudly.
+ */
+export enum NodeEnv {
+  Development = 'development',
+  Test = 'test',
+  Production = 'production',
+}
 
 export class EnvironmentVariables {
   @IsOptional()
@@ -57,9 +69,8 @@ export class EnvironmentVariables {
   @IsNotEmpty()
   CORS_ORIGIN!: string;
 
-  @IsOptional()
-  @IsString()
-  NODE_ENV?: string;
+  @IsEnum(NodeEnv)
+  NODE_ENV!: NodeEnv;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

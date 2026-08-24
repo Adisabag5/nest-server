@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { CookieOptions, Request } from 'express';
+import { NodeEnv } from '../config/env.validation';
 
 export const REFRESH_COOKIE = 'refresh_token';
 
@@ -9,7 +10,7 @@ export function refreshCookieOptions(
   config: ConfigService,
   expiresAt?: Date,
 ): CookieOptions {
-  const isProduction = config.get<string>('NODE_ENV') === 'production';
+  const isProduction = config.get<string>('NODE_ENV') === NodeEnv.Production;
 
   return {
     httpOnly: true,
