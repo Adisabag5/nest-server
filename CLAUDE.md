@@ -65,7 +65,7 @@ src/
     collection.controller.ts  CRUD under /collections
     collection.service.ts  every method scoped by userId; 403 on someone else's row
     entities/collection.entity.ts  @Entity('collections'); unique (user_id, name)
-  beat/                    STUB — a saved pattern; Adi will finish this
+  beat/                    a saved pattern, owned by a user; full CRUD
     beat.controller.ts     CRUD under /beats, ?collectionId= filter
     beat.service.ts        ownership checks, data.version + size validation
     entities/beat.entity.ts  @Entity('beats'); json `data` column
@@ -102,7 +102,7 @@ test/auth.e2e-spec.ts      e2e for signup/signin/guard with an in-memory fake re
 | GET | `/user` | findAll | **paginated** |
 | GET | `/user/:id` | findOne | 404 if missing |
 | PATCH | `/user/:id` | update | 404 if missing, 409 on duplicate email; re-hashes `password` |
-| DELETE | `/user/:id` | remove | 404 if missing |
+| DELETE | `/user/:id` | remove | **ADMIN only** (`@Roles` + `RolesGuard`); 404 if missing |
 
 `id` params are **strings** end-to-end (`User.id` is `bigint`, which TypeORM maps to string).
 `passwordHash` never reaches a response: `@Exclude()` on the entity + a global
@@ -196,7 +196,7 @@ is derived from the email local part, sanitised, and suffixed until free.
 `collections`: `id` · `user_id` FK→users (CASCADE) · `name` varchar(60) · `description`
 (280, null) · timestamps. Unique on `(user_id, name)` — two users may both have "Lo-fi".
 
-`beats` (**stub — Adi is finishing this**): `id` · `user_id` FK→users (CASCADE) ·
+`beats`: `id` · `user_id` FK→users (CASCADE) ·
 `collection_id` FK→collections (**SET NULL**, so deleting a collection unfiles its beats
 rather than destroying work) · `title` varchar(100) · `data` **json** · timestamps.
 
@@ -263,11 +263,15 @@ modules is real and throws proper HTTP exceptions, request bodies are validated,
 are namespaced and validated at boot, and the tests assert behavior.
 
 **Phase 5 (auth) is done too**: signup/signin/signout issue and verify JWTs, and a global
-guard protects everything not marked `@Public()`. `pnpm test` 31 unit, `pnpm test:e2e` 16
-e2e, neither needs a live MySQL.
+guard protects everything not marked `@Public()`. Rotating refresh tokens, revocation and
+reuse detection are in as well — see "Refresh tokens & sessions", which is the authority on
+how sessions actually work. Neither suite needs a live MySQL.
 
-**Pulse domain (2026-08-20)**: profiles, collections and a stub beats module are in, with
-ownership checks and 55 unit + 17 e2e tests.
+**Pulse domain (2026-08-20)**: profiles, collections and beats are in, with ownership
+checks throughout. **Current totals: `pnpm test` 79 unit, `pnpm test:e2e` 17 e2e.**
+
+The frontend is a live consumer as of 2026-09-24: Pulse saves a beat with `POST /beats` and
+updates it with `PATCH /beats/:id`. Changing a `/beats` shape now breaks a running client.
 
 Decisions Adi settled on 2026-08-22 — treat these as closed, do not re-litigate:
 1. The entity is **`Beat`** (see Naming under Data model).
@@ -275,16 +279,18 @@ Decisions Adi settled on 2026-08-22 — treat these as closed, do not re-litigat
    `GET /profiles/:username`. Do not add `@Public()` to that controller.
 3. **A beat belongs to exactly one collection** (`collection_id`, nullable while unfiled).
    No join table, no multi-collection membership.
-
 4. **Pagination** is in (2026-08-22): see the Pagination section. Adi is building the
    frontend side against `{items, meta}`.
 
 Remaining — Phase 6 (production shape), plus auth follow-ups:
 
-1. No refresh tokens and no revocation: a signed JWT stays valid until it expires, so
-   `signout` is client-side only. A denylist or short access + refresh tokens is the fix.
-2. No roles/permissions — the guard answers "who are you", not "what may you do".
-   Nothing stops user A from `PATCH /user/<B's id>`.
+1. **Ownership on `/user/*`.** `PATCH /user/:id` takes the id straight from the URL and
+   never compares it to the caller — any signed-in user can edit anyone. `DELETE /user/:id`
+   is ADMIN-only, so the hole is the PATCH. Collections and beats already scope every
+   method by `userId`; `/user/*` is the module that was never brought in line.
+2. **Roles are enforced on exactly one route.** `RolesGuard` + `@Roles(Role.ADMIN)` guard
+   `DELETE /user/:id` and nothing else. The guard also assumes `@Roles` is present: applied
+   to a route without it, `requiredRoles` is undefined and `.some()` throws.
 3. `synchronize: true` still rewrites the schema from the entities — migrations come next.
 4. No `docker-compose.yml` for MySQL, no global exception filter, no `api` prefix or
    versioning, no Swagger, no health check, no CI. `README.md` is still stock Nest boilerplate.
