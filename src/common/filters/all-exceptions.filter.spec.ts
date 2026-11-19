@@ -12,7 +12,7 @@ import { QueryFailedError } from 'typeorm';
 import { AllExceptionsFilter, ErrorBody } from './all-exceptions.filter';
 
 function hostFor(method = 'POST', url = '/api/auth/signup') {
-  const json = jest.fn();
+  const json = jest.fn<void, [ErrorBody]>();
   const status = jest.fn().mockReturnValue({ json });
 
   const host = {
@@ -22,7 +22,7 @@ function hostFor(method = 'POST', url = '/api/auth/signup') {
     }),
   } as unknown as ArgumentsHost;
 
-  return { host, status, body: () => json.mock.calls[0]?.[0] as ErrorBody };
+  return { host, status, body: (): ErrorBody => json.mock.calls[0][0] };
 }
 
 describe('AllExceptionsFilter', () => {
@@ -31,7 +31,9 @@ describe('AllExceptionsFilter', () => {
 
   beforeEach(() => {
     filter = new AllExceptionsFilter();
-    logged = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    logged = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -55,7 +57,10 @@ describe('AllExceptionsFilter', () => {
     const { host, body } = hostFor();
 
     filter.catch(
-      new BadRequestException(['email must be an email', 'password is too short']),
+      new BadRequestException([
+        'email must be an email',
+        'password is too short',
+      ]),
       host,
     );
 
@@ -103,7 +108,10 @@ describe('AllExceptionsFilter', () => {
       filter.catch(driverError, host);
 
       expect(logged).toHaveBeenCalledTimes(1);
-      expect(logged.mock.calls[0][0]).toContain('/api/auth/signup');
+      expect(logged).toHaveBeenCalledWith(
+        expect.stringContaining('/api/auth/signup'),
+        expect.any(String),
+      );
     });
   });
 

@@ -8,6 +8,9 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
+/** getStatus() returns a number, so compare against one. */
+const SERVER_ERROR: number = HttpStatus.INTERNAL_SERVER_ERROR;
+
 /** The shape every error response has, whatever went wrong. */
 export interface ErrorBody {
   statusCode: number;
@@ -55,7 +58,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     // 5xx is ours to fix, so it gets a stack. 4xx is the client being told no,
     // which is routine and would only drown the log.
-    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (status >= SERVER_ERROR) {
       this.logger.error(
         `${request.method} ${request.url} -> ${status}`,
         exception instanceof Error ? exception.stack : String(exception),
