@@ -39,7 +39,9 @@ NestJS 11 · TypeORM + MySQL (`mysql2`) · `@nestjs/config` · `bcrypt` · `clas
 
 ```
 src/
-  main.ts                  bootstrap; global ValidationPipe + ClassSerializerInterceptor; PORT ?? 3000
+  main.ts                  bootstrap; /api prefix, ValidationPipe, serializer, static client, PORT ?? 3000
+  config/api-prefix.ts     API_PREFIX — one source for the prefix and the cookie Path
+  health/                  GET /api/health: public liveness + a real DB round trip
   app.module.ts            root: ConfigModule(global, validated) + TypeOrmModule.forRootAsync + Profiles/User/AuthModule
   app.controller.ts        GET / -> "Hello World!" (@Public)
   app.service.ts
@@ -90,31 +92,44 @@ test/auth.e2e-spec.ts      e2e for signup/signin/guard with an in-memory fake re
 
 | Method | Path | Handler | Notes |
 |---|---|---|---|
-| GET | `/` | AppController.getHello | `@Public()` |
-| POST | `/auth/signup` | AuthService.signup | `@Public()`; 201 + `{access_token, user}`; 409 on duplicate |
-| POST | `/auth/signin` | AuthService.signIn | `@Public()`; **200** (nothing created); 401 on bad credentials |
-| POST | `/auth/refresh` | AuthService.refresh | `@Public()` + `JwtRefreshGuard`; **200**; rotates the cookie |
-| POST | `/auth/signout` | AuthService.signOut | cookie-authenticated; revokes **this** session only |
-| GET | `/profiles/me` | ProfileService.findByUserId | own profile |
-| PATCH | `/profiles/me` | update | 409 if the username is taken |
-| GET | `/profiles/:username` | findByUsername | 404 if missing |
-| POST | `/collections` | CollectionService.create | 409 on a duplicate name for that user |
-| GET | `/collections` | findAllForUser | only the caller's; **paginated** |
-| GET/PATCH/DELETE | `/collections/:id` | | 404 if missing, **403** if not yours; DELETE is 204 |
-| POST | `/beats` | BeatService.create | 400 unless `data.version` is a positive int |
-| GET | `/beats` | findAllForUser | `?collectionId=` filters; **paginated** |
-| GET/PATCH/DELETE | `/beats/:id` | | 404 if missing, **403** if not yours; DELETE is 204 |
-| POST | `/user` | UserService.create | hashes password (bcrypt, 10 rounds); 409 on duplicate email |
-| GET | `/user` | findAll | **paginated** |
-| GET | `/user/:id` | findOne | 404 if missing |
-| PATCH | `/user/:id` | update | 404 if missing, 409 on duplicate email; re-hashes `password` |
-| DELETE | `/user/:id` | remove | 404 if missing |
+| GET | `/api` | AppController.getHello | `@Public()` |
+| GET | `/api/health` | HealthController.check | `@Public()`; `{status, uptimeSeconds, database}` |
+| POST | `/api/auth/signup` | AuthService.signup | `@Public()`; 201 + `{access_token, user}`; 409 on duplicate |
+| POST | `/api/auth/signin` | AuthService.signIn | `@Public()`; **200** (nothing created); 401 on bad credentials |
+| POST | `/api/auth/refresh` | AuthService.refresh | `@Public()` + `JwtRefreshGuard`; **200**; rotates the cookie |
+| POST | `/api/auth/signout` | AuthService.signOut | cookie-authenticated; revokes **this** session only |
+| GET | `/api/profiles/me` | ProfileService.findByUserId | own profile |
+| PATCH | `/api/profiles/me` | update | 409 if the username is taken |
+| GET | `/api/profiles/:username` | findByUsername | 404 if missing |
+| POST | `/api/collections` | CollectionService.create | 409 on a duplicate name for that user |
+| GET | `/api/collections` | findAllForUser | only the caller's; **paginated** |
+| GET/PATCH/DELETE | `/api/collections/:id` | | 404 if missing, **403** if not yours; DELETE is 204 |
+| POST | `/api/beats` | BeatService.create | 400 unless `data.version` is a positive int |
+| GET | `/api/beats` | findAllForUser | `?collectionId=` filters; **paginated** |
+| GET/PATCH/DELETE | `/api/beats/:id` | | 404 if missing, **403** if not yours; DELETE is 204 |
+| POST | `/api/user` | UserService.create | hashes password (bcrypt, 10 rounds); 409 on duplicate email |
+| GET | `/api/user` | findAll | **paginated** |
+| GET | `/api/user/:id` | findOne | 404 if missing |
+| PATCH | `/api/user/:id` | update | 404 if missing, 409 on duplicate email; re-hashes `password` |
+| DELETE | `/api/user/:id` | remove | 404 if missing |
 
-**Every `/user/*` route is ADMIN-only** — `@Roles(Role.ADMIN)` + `RolesGuard` sit on the
-controller, not on individual handlers. Pulse never calls these: it signs people in through
-`/auth` and reads their details through `/profiles`. Self-service account editing, if it is
-ever wanted, belongs on a `/user/me`-shaped route that takes the id from the token, the way
-`/profiles/me` does — never from a path parameter.
+**Every `/api/user/*` route is ADMIN-only** — `@Roles(Role.ADMIN)` + `RolesGuard` sit on
+the controller, not on individual handlers. Pulse never calls these: it signs people in
+through `/api/auth` and reads their details through `/api/profiles`. Self-service account
+editing, if it is ever wanted, belongs on a `/api/user/me`-shaped route that takes the id
+from the token, the way `/api/profiles/me` does — never from a path parameter.
+
+**Everything the server answers lives under `/api`** (`setGlobalPrefix`). Pulse is served
+from the same origin in production, and without the prefix the Angular route `/auth` and
+the API's `/auth/*` endpoints share a path — they only miss each other today because the
+page is a GET and the endpoints are POSTs. `API_PREFIX` lives in `config/api-prefix.ts`
+because the refresh cookie's `Path` must track it; a cookie on the wrong path is sent on no
+request at all, and that reads as a broken session rather than a broken path.
+
+**Serving the frontend.** Set `CLIENT_DIST` to the built Angular directory and the server
+serves it, falling back to `index.html` for any non-API GET so deep links reach the router.
+Unset, the server is API-only — which is what dev and both test suites expect. If it points
+somewhere without an `index.html`, boot fails loudly rather than 404ing every page.
 
 `id` params are **strings** end-to-end (`User.id` is `bigint`, which TypeORM maps to string).
 `passwordHash` never reaches a response: `@Exclude()` on the entity + a global
@@ -129,9 +144,11 @@ and cannot be revoked. The **refresh token** lives in an httpOnly cookie scoped 
 `/auth`, and every one has a row in `refresh_tokens` — which is what makes revocation,
 and therefore a real `signout`, possible at all.
 
-- Cookie flags: `httpOnly` always; `secure` + `SameSite=None` only when
-  `NODE_ENV=production` (a cross-site Vercel frontend needs None, which requires Secure);
-  `SameSite=Lax` locally. `Path=/auth` so ordinary API calls never carry it.
+- Cookie flags: `httpOnly` always; `secure` when `NODE_ENV=production`; `SameSite=Lax`
+  everywhere, because the app and the API share one origin and the cookie is never sent
+  cross-site. `Path=/api/auth`, so ordinary API calls never carry it. Splitting the
+  frontend onto its own domain again would mean `SameSite=None` (which requires `Secure`)
+  plus that origin in `CORS_ORIGIN`.
 - **Rotation**: every `/auth/refresh` revokes the presented token and issues a new one.
 - **Reuse detection**: replaying a token revoked with reason `ROTATED` means two parties
   hold it, so every session for that user is revoked. A token revoked by `SIGNED_OUT` is
@@ -312,8 +329,9 @@ Decisions Adi settled on 2026-08-22 — treat these as closed, do not re-litigat
 
 Remaining — Phase 6 (production shape), plus auth follow-ups:
 
-1. No `docker-compose.yml` for MySQL, no global exception filter, no `api` prefix or
-   versioning, no Swagger, no health check, no CI. `README.md` is still stock Nest boilerplate.
+1. No `docker-compose.yml` for MySQL, no global exception filter, no API **versioning**,
+   no Swagger, no CI. `README.md` is still stock Nest boilerplate — but see `DEPLOY.md`
+   for the Hostinger VPS runbook.
 
 **Closed 2026-11-19**: `/user/*` ownership and the roles gap — the controller is ADMIN-only
 (see the note under Routes); `RolesGuard` no longer throws without `@Roles`; and

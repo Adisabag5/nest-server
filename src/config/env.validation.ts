@@ -71,6 +71,16 @@ export class EnvironmentVariables {
 
   @IsEnum(NodeEnv)
   NODE_ENV!: NodeEnv;
+
+  /**
+   * Absolute path to the built Angular app. Set it and the server serves the
+   * frontend from the same origin; leave it out and the server is API-only,
+   * which is what every dev machine and both test suites want.
+   */
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  CLIENT_DIST?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

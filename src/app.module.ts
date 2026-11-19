@@ -9,6 +9,7 @@ import { UserModule } from './user/user.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { NodeEnv, validateEnv } from './config/env.validation';
 import { AuthModule } from './auth/auth.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -50,6 +51,8 @@ import { AuthModule } from './auth/auth.module';
     UserModule,
 
     AuthModule,
+
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
