@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to the same PR makes the first run pointless; stop it rather
+# than pay for it. Never cancels a run on main.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads the pinned version from package.json's packageManager field, so
+      # CI and a developer's machine cannot drift apart.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # --frozen-lockfile fails if the lockfile and package.json disagree,
+      # which is the point: CI must install what was reviewed.
+      - run: pnpm install --frozen-lockfile
+
+      # lint:check, not lint — the latter passes --fix, which would quietly
+      # rewrite the files and exit 0 instead of failing the build.
+      - run: pnpm lint:check
+
+      - run: pnpm typecheck
+
+      # Neither suite needs MySQL or a .env: both use in-memory fakes, and the
+      # e2e module supplies its own ConfigService.
+      - run: pnpm test
+      - run: pnpm test:e2e
+
+      # Last, because a compile error the tests tolerate still breaks a deploy.
+      - run: pnpm build

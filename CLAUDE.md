@@ -27,13 +27,15 @@ NestJS 11 · TypeORM + MySQL (`mysql2`) · `@nestjs/config` · `bcrypt` · `clas
 | unit tests | `pnpm test` (Jest, `rootDir: src`, `*.spec.ts`) |
 | e2e | `pnpm test:e2e` (`test/jest-e2e.json`) |
 | lint / format | `pnpm lint` / `pnpm format` (prettier: single quotes, trailing commas) |
+| lint without fixing | `pnpm lint:check` — what CI runs |
+| typecheck everything | `pnpm typecheck` |
 | scaffold | `nest g resource <name>` |
 | promote/demote a user | `pnpm set-role <email> <ADMIN\|USER>` |
 | run pending migrations | `pnpm migration:run` |
 | list migration state | `pnpm migration:show` |
 | undo the last migration | `pnpm migration:revert` |
 | write a new migration | `pnpm typeorm migration:generate src/migrations/<Name>` |
-| typecheck everything | `npx tsc --noEmit` (`pnpm build` skips `*.spec.ts`) |
+| typecheck (equivalently) | `npx tsc --noEmit` (`pnpm build` skips `*.spec.ts`) |
 
 ## File map
 
@@ -353,8 +355,17 @@ Decisions Adi settled on 2026-08-22 — treat these as closed, do not re-litigat
 Remaining — Phase 6 (production shape), plus auth follow-ups:
 
 1. No `docker-compose.yml` for MySQL, no global exception filter, no API **versioning**,
-   no Swagger, no CI. `README.md` is still stock Nest boilerplate — but see `DEPLOY.md`
-   for the Hostinger VPS runbook.
+   no Swagger. `README.md` is still stock Nest boilerplate — but see `DEPLOY.md` for the
+   Hostinger VPS runbook.
+
+**CI** (`.github/workflows/ci.yml`) runs on every pull request and every push to `main`:
+install, `lint:check`, `typecheck`, both suites, then `build`. It needs no MySQL and no
+`.env` — the suites use in-memory fakes and the e2e module supplies its own ConfigService.
+
+It runs `lint:check`, not `lint`, deliberately. `lint` passes `--fix`, so an auto-fixable
+violation (formatting, mostly) gets rewritten in the runner and the job exits 0: the build
+goes green while the committed code stays unformatted. Non-fixable errors fail either way
+— it is the fixable ones that would slip through.
 
 **Closed 2026-11-19**: `/user/*` ownership and the roles gap — the controller is ADMIN-only
 (see the note under Routes); `RolesGuard` no longer throws without `@Roles`; and
