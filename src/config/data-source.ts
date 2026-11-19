@@ -12,6 +12,8 @@ import { DataSource } from 'typeorm';
  * Entities are globbed from the compiled output or the source depending on how
  * the CLI is invoked, which is why both patterns are listed.
  */
+const isSource = __filename.endsWith('.ts');
+
 export default new DataSource({
   type: 'mysql',
   host: process.env.DB_HOST,
@@ -19,8 +21,12 @@ export default new DataSource({
   username: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  entities: ['src/**/entities/*.ts', 'dist/**/entities/*.js'],
-  migrations: ['src/migrations/*.ts', 'dist/migrations/*.js'],
+  // One or the other, never both. Globbing src and dist together loads every
+  // entity and migration twice as soon as `pnpm build` has produced dist/, and
+  // TypeORM refuses to start: "Duplicate migrations: InitialSchema...". The CLI
+  // scripts run this file through ts-node, so __filename tells us which.
+  entities: [isSource ? 'src/**/entities/*.ts' : 'dist/**/entities/*.js'],
+  migrations: [isSource ? 'src/migrations/*.ts' : 'dist/migrations/*.js'],
   // Never true here. The CLI's whole job is to replace schema guessing with
   // reviewed, versioned SQL.
   synchronize: false,
