@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Public } from '../auth/decorators/public.decorator';
 
 interface Health {
@@ -16,6 +17,10 @@ interface Health {
  * when auth is what broke. It reports no versions, hostnames or configuration —
  * an unauthenticated endpoint should give an attacker nothing to work with.
  */
+// Not rate limited: a process manager or uptime check polls this on a fixed
+// interval, and throttling it would turn routine monitoring into an outage
+// report. It reads nothing an attacker can use.
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}

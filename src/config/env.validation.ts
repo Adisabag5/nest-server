@@ -81,6 +81,23 @@ export class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   CLIENT_DIST?: string;
+
+  /**
+   * How many reverse proxies sit in front of the app — 1 behind the nginx in
+   * DEPLOY.md, unset when Node is exposed directly.
+   *
+   * It decides what `req.ip` is, and therefore what rate limiting counts. Unset
+   * behind nginx, every request looks like it came from nginx and all callers
+   * share one bucket, so a handful of sign-in attempts locks out the world.
+   * Set when there is no proxy, a client can forge X-Forwarded-For and have a
+   * fresh bucket per request. Both failure modes are silent, which is why this
+   * is explicit rather than inferred from NODE_ENV.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  TRUST_PROXY?: number;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

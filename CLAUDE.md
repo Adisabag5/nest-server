@@ -47,6 +47,7 @@ src/
   app.service.ts
   config/env.validation.ts EnvironmentVariables class + validateEnv(); fails boot on a bad .env
   config/data-source.ts    DataSource for the TypeORM CLI only (the app uses forRootAsync)
+  config/throttle.ts       rate limits: the default budget and the strict auth one
   migrations/              versioned schema SQL; production runs these on boot
   common/pagination.ts     paginate() + buildMeta(); the Paginated<T> shape
   common/dto/pagination-query.dto.ts  ?page= &limit= (default 20, max 100)
@@ -112,6 +113,26 @@ test/auth.e2e-spec.ts      e2e for signup/signin/guard with an in-memory fake re
 | GET | `/api/user/:id` | findOne | 404 if missing |
 | PATCH | `/api/user/:id` | update | 404 if missing, 409 on duplicate email; re-hashes `password` |
 | DELETE | `/api/user/:id` | remove | 404 if missing |
+
+**Rate limiting.** `ThrottlerGuard` is an `APP_GUARD`, so a new controller is limited the
+moment it exists and opening a hole is an explicit `@SkipThrottle()` — the same reasoning
+as `JwtAuthGuard`. Two budgets, both per client IP (`config/throttle.ts`): a generous
+default (120/min) for ordinary traffic, and a strict one on `signup` and `signin`
+(10/min, then blocked for 5 minutes). Over the limit is a **429**, before the credential
+check runs. `refresh` deliberately keeps the default budget — it fires on every page load,
+and reuse detection punishes a replayed token far more precisely than a rate limit could.
+`GET /api/health` is exempt, because monitoring polls it on a fixed interval.
+
+Counting is in memory, so each process counts alone and a restart forgets. That is the
+right trade for one VPS instance; the day a second one exists, the effective limit silently
+doubles.
+
+**`TRUST_PROXY` decides who gets counted.** It is the number of reverse proxies in front of
+the app — 1 behind the nginx in `DEPLOY.md`, unset when Node is exposed directly. Unset
+behind a proxy, every request looks like it came from the proxy and all callers share one
+bucket, so a few sign-in attempts lock out everyone. Set with no proxy, a client can forge
+`X-Forwarded-For` and get a fresh bucket per request. Both fail silently, which is why it
+is explicit rather than inferred from `NODE_ENV`.
 
 **Every `/api/user/*` route is ADMIN-only** — `@Roles(Role.ADMIN)` + `RolesGuard` sit on
 the controller, not on individual handlers. Pulse never calls these: it signs people in
@@ -252,6 +273,8 @@ caller's id and throws `ForbiddenException` on someone else's row.
 committed schema. Keys: `PORT`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
 — all `DB_`-prefixed so they can't collide with OS/CI variables (`@nestjs/config` does
 **not** override variables already present in the environment).
+`CLIENT_DIST` (optional) serves the built frontend; `TRUST_PROXY` (optional) is the proxy
+hop count that rate limiting counts by.
 Auth adds `JWT_SECRET` (>= 32 chars), `JWT_EXPIRES_IN`, plus `JWT_REFRESH_SECRET`
 (a **different** secret, >= 32 chars), `JWT_REFRESH_EXPIRES_IN` (e.g. `7d`) and
 `CORS_ORIGIN` (comma-separated; `credentials: true` forbids `*`).

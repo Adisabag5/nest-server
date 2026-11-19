@@ -17,6 +17,11 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
+  // See TRUST_PROXY in env.validation.ts: this is what makes req.ip the real
+  // caller behind a reverse proxy, and therefore what rate limiting counts.
+  const trustProxy = config.get<number>('TRUST_PROXY');
+  if (trustProxy) app.set('trust proxy', Number(trustProxy));
+
   // Everything the server answers lives under /api. Without it, the Angular
   // route /auth and the API's /auth/* endpoints share a path: they only avoid
   // each other today because the page is a GET and the endpoints are POSTs,
