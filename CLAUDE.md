@@ -52,6 +52,7 @@ src/
   config/throttle.ts       rate limits: the default budget and the strict auth one
   migrations/              versioned schema SQL; production runs these on boot
   common/pagination.ts     paginate() + buildMeta(); the Paginated<T> shape
+  common/filters/all-exceptions.filter.ts  one error shape; hides non-HTTP errors, logs 5xx
   common/dto/pagination-query.dto.ts  ?page= &limit= (default 20, max 100)
   scripts/set-role.ts      CLI: promote/demote a user out of band (the first admin)
   auth/                    AUTH module — JWT issue + verify
@@ -354,9 +355,22 @@ Decisions Adi settled on 2026-08-22 — treat these as closed, do not re-litigat
 
 Remaining — Phase 6 (production shape), plus auth follow-ups:
 
-1. No `docker-compose.yml` for MySQL, no global exception filter, no API **versioning**,
-   no Swagger. `README.md` is still stock Nest boilerplate — but see `DEPLOY.md` for the
-   Hostinger VPS runbook.
+1. No `docker-compose.yml` for MySQL, no API **versioning**, no Swagger. `README.md` is
+   still stock Nest boilerplate — but see `DEPLOY.md` for the Hostinger VPS runbook.
+
+**Every error has one shape** (`common/filters/all-exceptions.filter.ts`):
+
+```json
+{ "statusCode": 409, "message": "...", "error": "Conflict",
+  "path": "/api/auth/signup", "timestamp": "2026-11-19T..." }
+```
+
+`message` is passed through untouched, including the array `ValidationPipe` produces — the
+frontend reads it to explain a 400, so tidying it into one string would blank those
+messages. Anything that is not an `HttpException` is a bug rather than a refusal: it
+becomes a flat 500 saying nothing, while the real error and its stack go to the log. A
+`QueryFailedError` carries the SQL, the column names and the parameters, and none of that
+belongs in a response. 4xx is not logged; it is the client being told no.
 
 **CI** (`.github/workflows/ci.yml`) runs on every pull request and every push to `main`:
 install, `lint:check`, `typecheck`, both suites, then `build`. It needs no MySQL and no

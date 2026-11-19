@@ -10,6 +10,7 @@ import { AppModule } from './app.module';
 import { corsOriginChecker } from './config/cors';
 import { NodeEnv } from './config/env.validation';
 import { API_PREFIX } from './config/api-prefix';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -45,6 +46,11 @@ async function bootstrap() {
   );
 
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+
+  // One shape for every error, and one place that decides what leaves the
+  // building. Registered here rather than as an APP_FILTER provider so the
+  // ordering next to the pipe and interceptor is visible in one read.
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   serveClientIfBuilt(app, config);
 
