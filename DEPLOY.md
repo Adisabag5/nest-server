@@ -79,7 +79,7 @@ pnpm build
 rsync -a --delete dist/angular-starter-template/browser/ user@vps:/var/www/pulse/client/
 
 # 2. Backend
-cd nest-server
+cd sequencer-server
 git pull
 pnpm install --frozen-lockfile
 pnpm build
