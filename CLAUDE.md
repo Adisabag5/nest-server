@@ -1,4 +1,4 @@
-# CLAUDE.md — nest-server
+# CLAUDE.md — sequencer-server
 
 Learning project: a small NestJS REST server. Owner: Adi. Goal is learning Nest
 fundamentals (modules / controllers / services / DI / DTOs / TypeORM), not production.
