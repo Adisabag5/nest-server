@@ -13,7 +13,7 @@ you need from the map below. Do not scan `src/` or run `find`. Never read
 
 ## Stack
 
-Node 25 (`.nvmrc`) · TypeScript 5.7 (ESM `nodenext`, `strictNullChecks` on, `noImplicitAny` off)
+Node 24 LTS (`.nvmrc`) · TypeScript 5.7 (ESM `nodenext`, `strictNullChecks` on, `noImplicitAny` off)
 NestJS 11 · TypeORM + MySQL (`mysql2`) · `@nestjs/config` · `bcrypt` · `class-transformer` +
 `class-validator` · `@nestjs/jwt` + `@nestjs/passport` + `passport-jwt` · Jest + Supertest
 · pnpm 10.33 (pinned via `packageManager`)

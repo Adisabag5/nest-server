@@ -28,7 +28,14 @@ to terminate TLS and it is what the rest of this runbook assumes.
 
 **1. Node and MySQL**
 
-Install Node 25 (`.nvmrc`) and MySQL. Create the database and a user that owns only it:
+Install Node 24 (`.nvmrc`) and MySQL. Create the database and a user that owns only it:
+
+> **Why 24 and not the newest.** Odd-numbered Node releases never become LTS — they stop
+> getting security fixes within months, which is the wrong property for a box you intend to
+> leave running. Node 24 is the Krypton LTS line. Node 26 (Lithium) is the newer LTS, so
+> this is a deliberate choice of the more settled line rather than the latest one; moving
+> up later means changing `.nvmrc` and reinstalling on the VPS.
+
 
 ```sql
 CREATE DATABASE pulse CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
