@@ -1,10 +1,12 @@
 import { ConfigService } from '@nestjs/config';
 import { CookieOptions, Request } from 'express';
 import { NodeEnv } from '../config/env.validation';
+import { API_PREFIX } from '../config/api-prefix';
 
 export const REFRESH_COOKIE = 'refresh_token';
 
-const COOKIE_PATH = '/auth';
+/** Scoped to the auth routes, so ordinary API calls never carry the cookie. */
+const COOKIE_PATH = `/${API_PREFIX}/auth`;
 
 export function refreshCookieOptions(
   config: ConfigService,
@@ -15,7 +17,11 @@ export function refreshCookieOptions(
   return {
     httpOnly: true,
     secure: isProduction,
-    sameSite: isProduction ? 'none' : 'lax',
+    // Lax, not None: the app and the API are served from one origin, so the
+    // cookie is never sent cross-site and does not need the weaker setting.
+    // SameSite=None exists for a frontend on a different domain — restore it,
+    // together with that origin in CORS_ORIGIN, only if the two are split.
+    sameSite: 'lax',
     path: COOKIE_PATH,
     ...(expiresAt ? { maxAge: expiresAt.getTime() - Date.now() } : {}),
   };

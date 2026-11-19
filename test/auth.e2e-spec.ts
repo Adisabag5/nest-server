@@ -226,7 +226,7 @@ describe('Auth + refresh (e2e)', () => {
       );
       expect(cookie).toBeDefined();
       expect(cookie).toContain('HttpOnly');
-      expect(cookie).toContain('Path=/auth');
+      expect(cookie).toContain('Path=/api/auth');
       expect(JSON.stringify(body)).not.toContain('refresh_token');
     });
 

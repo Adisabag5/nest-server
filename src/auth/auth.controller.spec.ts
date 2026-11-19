@@ -74,7 +74,8 @@ describe('AuthController', () => {
     expect(name).toBe(REFRESH_COOKIE);
     expect(value).toBe('refresh.jwt');
     expect(options.httpOnly).toBe(true);
-    expect(options.path).toBe('/auth');
+    // scoped under the API prefix, so ordinary API calls never carry it
+    expect(options.path).toBe('/api/auth');
   });
 
   it('refresh rotates using the token the guard put on the request', async () => {
@@ -100,7 +101,7 @@ describe('AuthController', () => {
     expect(authService.signOut).toHaveBeenCalledWith('presented.jwt');
     expect(res.clearCookie).toHaveBeenCalledWith(
       REFRESH_COOKIE,
-      expect.objectContaining({ path: '/auth' }),
+      expect.objectContaining({ path: '/api/auth' }),
     );
   });
 });
