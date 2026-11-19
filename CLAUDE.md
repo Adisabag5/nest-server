@@ -29,6 +29,10 @@ NestJS 11 · TypeORM + MySQL (`mysql2`) · `@nestjs/config` · `bcrypt` · `clas
 | lint / format | `pnpm lint` / `pnpm format` (prettier: single quotes, trailing commas) |
 | scaffold | `nest g resource <name>` |
 | promote/demote a user | `pnpm set-role <email> <ADMIN\|USER>` |
+| run pending migrations | `pnpm migration:run` |
+| list migration state | `pnpm migration:show` |
+| undo the last migration | `pnpm migration:revert` |
+| write a new migration | `pnpm typeorm migration:generate src/migrations/<Name>` |
 | typecheck everything | `npx tsc --noEmit` (`pnpm build` skips `*.spec.ts`) |
 
 ## File map
@@ -40,6 +44,8 @@ src/
   app.controller.ts        GET / -> "Hello World!" (@Public)
   app.service.ts
   config/env.validation.ts EnvironmentVariables class + validateEnv(); fails boot on a bad .env
+  config/data-source.ts    DataSource for the TypeORM CLI only (the app uses forRootAsync)
+  migrations/              versioned schema SQL; production runs these on boot
   common/pagination.ts     paginate() + buildMeta(); the Paginated<T> shape
   common/dto/pagination-query.dto.ts  ?page= &limit= (default 20, max 100)
   scripts/set-role.ts      CLI: promote/demote a user out of band (the first admin)
@@ -246,7 +252,23 @@ do not.
 malformed key fails startup instead of surfacing as a connection error later.
 Env values are always strings: use `Number(config.get('DB_PORT'))`, since
 `config.get<number>()` is an assertion, not a conversion.
-TypeORM runs with `synchronize: true` and `autoLoadEntities: true` (fine for learning; schema auto-syncs).
+**Schema: `synchronize` in development, migrations in production.**
+`synchronize: true` rewrites the schema to match the entities on every boot — handy on a
+throwaway dev database, data loss on a real one, because a renamed or removed property
+drops the column and the rows in it go with it. So `synchronize` is now
+`NODE_ENV !== 'production'`, and production gets `migrationsRun: true` instead: pending
+migrations apply at boot, so the app can never serve against a schema older than the code.
+That is safe for the single instance a VPS runs; revisit before running more than one.
+
+Generating a migration diffs the entities against a **live** database, so it needs one to
+connect to — and if that database already matches, you get "No changes". Generate against
+an empty one instead. The CLI reads `src/config/data-source.ts`, which takes the same
+`.env` through `node --env-file` (no dotenv dependency), so the CLI and the app can never
+describe different databases. Override a single value for a one-off run:
+`DB_NAME=scratch pnpm typeorm migration:generate src/migrations/Foo`.
+
+Development keeps using `synchronize`, so the dev database never has migrations run
+against it: its `migrations` table stays empty, and that is expected, not a problem.
 Never print or commit `.env` values.
 
 ## Conventions
@@ -290,14 +312,12 @@ Decisions Adi settled on 2026-08-22 — treat these as closed, do not re-litigat
 
 Remaining — Phase 6 (production shape), plus auth follow-ups:
 
-1. `synchronize: true` still rewrites the schema from the entities — migrations come next.
-   **This must not reach a production database**: TypeORM will drop columns to match the
-   entities, and the data in them goes with it.
-2. No `docker-compose.yml` for MySQL, no global exception filter, no `api` prefix or
+1. No `docker-compose.yml` for MySQL, no global exception filter, no `api` prefix or
    versioning, no Swagger, no health check, no CI. `README.md` is still stock Nest boilerplate.
 
 **Closed 2026-11-19**: `/user/*` ownership and the roles gap — the controller is ADMIN-only
-(see the note under Routes), and `RolesGuard` no longer throws without `@Roles`.
+(see the note under Routes); `RolesGuard` no longer throws without `@Roles`; and
+`synchronize` no longer runs in production (see Config).
 
 ## Working agreement
 
