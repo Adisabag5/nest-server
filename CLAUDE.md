@@ -102,7 +102,13 @@ test/auth.e2e-spec.ts      e2e for signup/signin/guard with an in-memory fake re
 | GET | `/user` | findAll | **paginated** |
 | GET | `/user/:id` | findOne | 404 if missing |
 | PATCH | `/user/:id` | update | 404 if missing, 409 on duplicate email; re-hashes `password` |
-| DELETE | `/user/:id` | remove | **ADMIN only** (`@Roles` + `RolesGuard`); 404 if missing |
+| DELETE | `/user/:id` | remove | 404 if missing |
+
+**Every `/user/*` route is ADMIN-only** — `@Roles(Role.ADMIN)` + `RolesGuard` sit on the
+controller, not on individual handlers. Pulse never calls these: it signs people in through
+`/auth` and reads their details through `/profiles`. Self-service account editing, if it is
+ever wanted, belongs on a `/user/me`-shaped route that takes the id from the token, the way
+`/profiles/me` does — never from a path parameter.
 
 `id` params are **strings** end-to-end (`User.id` is `bigint`, which TypeORM maps to string).
 `passwordHash` never reaches a response: `@Exclude()` on the entity + a global
@@ -268,7 +274,7 @@ reuse detection are in as well — see "Refresh tokens & sessions", which is the
 how sessions actually work. Neither suite needs a live MySQL.
 
 **Pulse domain (2026-08-20)**: profiles, collections and beats are in, with ownership
-checks throughout. **Current totals: `pnpm test` 79 unit, `pnpm test:e2e` 17 e2e.**
+checks throughout. **Current totals: `pnpm test` 84 unit, `pnpm test:e2e` 18 e2e.**
 
 The frontend is a live consumer as of 2026-09-24: Pulse saves a beat with `POST /beats` and
 updates it with `PATCH /beats/:id`. Changing a `/beats` shape now breaks a running client.
@@ -284,16 +290,14 @@ Decisions Adi settled on 2026-08-22 — treat these as closed, do not re-litigat
 
 Remaining — Phase 6 (production shape), plus auth follow-ups:
 
-1. **Ownership on `/user/*`.** `PATCH /user/:id` takes the id straight from the URL and
-   never compares it to the caller — any signed-in user can edit anyone. `DELETE /user/:id`
-   is ADMIN-only, so the hole is the PATCH. Collections and beats already scope every
-   method by `userId`; `/user/*` is the module that was never brought in line.
-2. **Roles are enforced on exactly one route.** `RolesGuard` + `@Roles(Role.ADMIN)` guard
-   `DELETE /user/:id` and nothing else. The guard also assumes `@Roles` is present: applied
-   to a route without it, `requiredRoles` is undefined and `.some()` throws.
-3. `synchronize: true` still rewrites the schema from the entities — migrations come next.
-4. No `docker-compose.yml` for MySQL, no global exception filter, no `api` prefix or
+1. `synchronize: true` still rewrites the schema from the entities — migrations come next.
+   **This must not reach a production database**: TypeORM will drop columns to match the
+   entities, and the data in them goes with it.
+2. No `docker-compose.yml` for MySQL, no global exception filter, no `api` prefix or
    versioning, no Swagger, no health check, no CI. `README.md` is still stock Nest boilerplate.
+
+**Closed 2026-11-19**: `/user/*` ownership and the roles gap — the controller is ADMIN-only
+(see the note under Routes), and `RolesGuard` no longer throws without `@Roles`.
 
 ## Working agreement
 

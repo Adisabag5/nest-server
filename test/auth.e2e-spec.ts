@@ -130,7 +130,15 @@ function createFakes() {
     transaction: (cb: (m: unknown) => unknown) => cb(manager),
   };
 
-  return { userRepo, refreshRepo, profileRepo, dataSource, sessions, profiles };
+  return {
+    userRepo,
+    refreshRepo,
+    profileRepo,
+    dataSource,
+    sessions,
+    profiles,
+    users,
+  };
 }
 
 describe('Auth + refresh (e2e)', () => {
@@ -379,21 +387,59 @@ describe('Auth + refresh (e2e)', () => {
   });
 
   describe('the access token still guards the API', () => {
-    it('blocks without a token and allows with one', async () => {
+    /** Promote the signed-up account; the role reaches a token only on the next issue. */
+    const promoteToAdmin = () => {
+      fakes.users[0].role = Role.ADMIN;
+    };
+
+    it('blocks without a token, refuses a non-admin, allows an admin', async () => {
       await request(app.getHttpServer()).get('/user').expect(401);
 
       const response = await signup().expect(201);
       const { access_token } = response.body as { access_token: string };
 
+      // 403, not 200: /user is administrative CRUD, and listing it would hand
+      // any signed-in person every account's email address.
       await request(app.getHttpServer())
         .get('/user')
         .set('Authorization', `Bearer ${access_token}`)
+        .expect(403);
+
+      promoteToAdmin();
+      const admin = await signin().expect(200);
+      const adminToken = (admin.body as { access_token: string }).access_token;
+
+      await request(app.getHttpServer())
+        .get('/user')
+        .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
+    });
+
+    it('refuses one account editing another', async () => {
+      // The regression this controller was locked down for: PATCH took the id
+      // from the URL and never compared it to the caller, and update() re-hashes
+      // `password` — so this request used to be account takeover, not tampering.
+      const victim = await signup().expect(201);
+      const victimId = (victim.body as { user: { id: string } }).user.id;
+
+      const attacker = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'attacker@example.com', password: 'password123' })
+        .expect(201);
+      const token = (attacker.body as { access_token: string }).access_token;
+
+      await request(app.getHttpServer())
+        .patch(`/user/${victimId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ password: 'owned-by-the-attacker' })
+        .expect(403);
     });
 
     it('accepts the access token issued by a refresh', async () => {
       const first = await signup().expect(201);
+      promoteToAdmin();
 
+      // refresh re-reads the user, so the new token carries the new role
       const refreshed = await request(app.getHttpServer())
         .post('/auth/refresh')
         .set('Cookie', refreshCookie(first))
