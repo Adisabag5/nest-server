@@ -10,6 +10,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { NodeEnv, validateEnv } from './config/env.validation';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { THROTTLERS } from './config/throttle';
 
 @Module({
   imports: [
@@ -17,6 +20,8 @@ import { HealthModule } from './health/health.module';
     CollectionModule,
     BeatModule,
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+
+    ThrottlerModule.forRoot(THROTTLERS),
 
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
@@ -55,6 +60,13 @@ import { HealthModule } from './health/health.module';
     HealthModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+
+    // Global, so a new controller is rate limited the moment it exists — the
+    // same reasoning as JwtAuthGuard. Opening a hole is then an explicit
+    // @SkipThrottle, not an oversight.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}

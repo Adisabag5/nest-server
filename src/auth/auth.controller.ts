@@ -16,6 +16,8 @@ import { CreateUserDto } from '../user/dto/create-user.dto';
 import { Public } from './decorators/public.decorator';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { REFRESH_COOKIE, refreshCookieOptions } from './cookies';
+import { Throttle } from '@nestjs/throttler';
+import { AUTH_THROTTLE } from '../config/throttle';
 
 interface RefreshRequest extends Request {
   user: { id: string; refreshToken: string };
@@ -29,6 +31,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle(AUTH_THROTTLE)
   @Post('signup')
   async signup(
     @Body() createUserDto: CreateUserDto,
@@ -38,6 +41,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle(AUTH_THROTTLE)
   @HttpCode(HttpStatus.OK)
   @Post('signin')
   async signIn(

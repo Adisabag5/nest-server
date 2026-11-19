@@ -50,6 +50,7 @@ Copy `.env.example` and fill it in. The values that matter in production:
 | `JWT_REFRESH_SECRET` | a **different** `openssl rand -base64 48` | A leaked access secret must not mint refresh tokens. |
 | `CORS_ORIGIN` | `https://your-domain` | Unused while single-origin, but it is validated at boot, so it must be present and real. |
 | `CLIENT_DIST` | `/var/www/pulse/client` | Absolute path to the Angular build. Omit it and the server is API-only. |
+| `TRUST_PROXY` | `1` | nginx sits in front, so without it every request looks like it came from nginx and **all visitors share one rate-limit bucket** — a few sign-in attempts would lock out everyone. Omit it if you expose Node directly, or clients can forge `X-Forwarded-For` and dodge the limit. |
 | `DB_*` | the database above | |
 
 `validateEnv` fails the boot on a missing or malformed key, so a bad `.env` stops the
@@ -120,6 +121,10 @@ server {
 
 ```bash
 curl https://your-domain/api/health      # {"status":"ok","database":"up"}
+# eleventh sign-in attempt in a minute should be 429, not 401
+for i in $(seq 1 11); do curl -s -o /dev/null -w "%{http_code} " -X POST \
+  https://your-domain/api/auth/signin -H 'Content-Type: application/json' \
+  --data '{"email":"nobody@example.invalid","password":"wrong"}'; done; echo
 curl -I https://your-domain/             # 200, text/html
 curl -I https://your-domain/auth         # 200 — deep links reach the router
 ```
@@ -147,3 +152,8 @@ pnpm set-role you@example.com ADMIN
   rather than serve nothing, so you will see this immediately.
 - **A stale `dist/`.** `pnpm build` before restarting; pm2 runs the compiled output, not
   the sources.
+- **`TRUST_PROXY` unset behind nginx.** Sign-in is limited to 10 attempts a minute *per IP*,
+  and without this every visitor counts as the same IP. The symptom is users getting 429s
+  they did nothing to deserve.
+- **Rate-limit counts are per process and in memory.** Restarting clears them, and a second
+  instance would double the real limit. Fine for one VPS; not fine the day you scale out.
